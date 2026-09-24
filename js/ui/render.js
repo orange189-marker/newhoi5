@@ -279,6 +279,7 @@ window.IM = window.IM || {};
       const p = new Path2D(); hexPath(p, R.cx[R.hoverHex], R.cy[R.hoverHex], S);
       ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 1.5 / px; ctx.stroke(p);
     }
+    drawCamps(G, hexPx, px);
     drawCities(G, vis, hexPx, px);
     drawLabels(G, x0, y0, vw, vh, hexPx, px);
     if (R.showUnits !== false) {
@@ -287,6 +288,32 @@ window.IM = window.IM || {};
       drawBattles(G, px, hexPx);
     }
     drawNukes(G, px);
+  }
+
+  // Field camps of a military buildup: clusters of tents that grow with each report.
+  function drawCamps(G, hexPx, px) {
+    if (!G.camps || !G.camps.length || hexPx < 4) return;
+    for (const c of G.camps) {
+      const s = W.stateByName[c.city]; if (!s) continue;
+      const x0 = R.cx[s.cityHex], y0 = R.cy[s.cityHex] + S * 0.9;
+      const n = 2 + c.level * 3, r = S * 0.2;
+      ctx.fillStyle = 'rgba(40,20,10,0.35)';
+      ctx.beginPath(); ctx.ellipse(x0, y0, S * (0.5 + c.level * 0.18), S * (0.3 + c.level * 0.08), 0, 0, 7); ctx.fill();
+      for (let i = 0; i < n; i++) {
+        const a = i * 2.4, d = S * 0.12 * Math.sqrt(i) * (1 + c.level * 0.25);
+        const x = x0 + Math.cos(a) * d * 1.6, y = y0 + Math.sin(a) * d;
+        ctx.fillStyle = i % 4 === 0 ? '#9a8f5e' : '#6f6a3e';
+        ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r * 0.6); ctx.lineTo(x - r, y + r * 0.6); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 0.6 / px; ctx.stroke();
+      }
+      if (hexPx > 16) {
+        const fs = Math.max(8, Math.min(12, hexPx * 0.45)) / px;
+        ctx.font = `700 ${fs}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.lineWidth = 2.4 / px; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.fillStyle = '#e8c07a';
+        const label = `Field camp · ${['', 'small', 'growing', 'large', 'massive'][Math.min(4, c.level)]}`;
+        ctx.strokeText(label, x0, y0 + S * 0.55); ctx.fillText(label, x0, y0 + S * 0.55);
+      }
+    }
   }
 
   function drawCities(G, vis, hexPx, px) {

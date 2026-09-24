@@ -154,6 +154,7 @@ window.IM = window.IM || {};
     const mine = g.divisions.filter(d => d.owner === c.id);
     const auto = mine.filter(d => d.auto).length;
     els.outliner.innerHTML = '';
+    if (g.watch) els.outliner.appendChild(borderWatch(g));
     els.outliner.appendChild(box('wars', 'Wars', wars.length, wars.length ? wars.map(w => {
       const mySide = w.att.includes(c.id) ? 'att' : 'def';
       const foes = w[mySide === 'att' ? 'def' : 'att'].filter(x => g.countries[x].alive && !w.cap.has(x));
@@ -176,6 +177,37 @@ window.IM = window.IM || {};
         h('button', { class: 'btn small', onclick: () => { R.selected = new Set(mine.map(d => d.id)); R.selectedState = -1; P.selectionChanged(); R.dirty = true; } }, 'Select all'),
         h('button', { class: 'btn small', title: 'Hand every division to the AI general', onclick: () => { for (const d of mine) d.auto = true; P.toast({ text: 'All divisions delegated to the AI general.', kind: 'good' }); } }, 'Delegate all')))));
     els.outliner.appendChild(box('news', 'News', '', g.news.slice(0, 12).map(n => h('div', { class: 'small', style: { padding: '2px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' } }, h('span', { class: n.kind === 'bad' ? 'bad' : n.kind === 'good' ? 'good' : n.kind === 'major' ? 'gold' : '' }, n.text)))));
+  }
+
+  // Iron Meridian feature: an intelligence gauge for a brewing crisis.
+  let nearCache = { day: -1, n: 0 };
+  function observedNearBorder(g) {
+    const day = Math.floor(g.hour / 24);
+    if (nearCache.day === day && nearCache.g === g) return nearCache.n;
+    const tgt = IM.Game.byTag(g, g.watch.target);
+    const threat = new Set(g.watch.threat.map(t => g.tagId[t]).filter(x => x !== undefined));
+    for (const o of g.countries) if (o.alive && [...threat].some(t => IM.War.relation(g, t, o.id) === 1) && o.id !== tgt.id && IM.War.relation(g, tgt.id, o.id) !== 1) threat.add(o.id);
+    const zone = new Set();
+    for (const h of g.W.land) if (g.ctrl[h] === tgt.id) for (const j of g.W.neighbors(h)) { zone.add(j); for (const k of g.W.neighbors(j)) zone.add(k); }
+    const n = g.divisions.filter(d => threat.has(d.owner) && zone.has(d.hex)).length;
+    nearCache = { day, g, n };
+    return n;
+  }
+  function borderWatch(g) {
+    const w = g.watch;
+    const level = w.war ? 'War' : IM.Events.watchLevel(w.est);
+    const cls = { Low: 'good', Elevated: 'warn', High: 'bad', Severe: 'bad', War: 'bad' }[level];
+    const pts = w.hist.concat([[g.hour, w.est]]);
+    const t0 = pts[0][0], t1 = Math.max(t0 + 1, g.hour), vmax = 200000;
+    const path = pts.map(([t, v], i) => `${i ? 'L' : 'M'}${(4 + (t - t0) / (t1 - t0) * 212).toFixed(1)},${(38 - v / vmax * 34).toFixed(1)}`).join(' ');
+    const svg = `<svg viewBox="0 0 220 42" width="100%" height="42" aria-hidden="true"><path d="M4,38 H216" stroke="#3b4850" stroke-width="1"/><path d="${path}" fill="none" stroke="${level === 'Low' ? '#5cbf6a' : level === 'Elevated' ? '#e8a13a' : '#e0564a'}" stroke-width="2" stroke-linejoin="round"/><circle cx="${(4 + 212).toFixed(1)}" cy="${(38 - w.est / vmax * 34).toFixed(1)}" r="3" fill="#f2d27d"/></svg>`;
+    return h('div', { class: 'obox watch' + (level === 'Severe' || level === 'War' ? ' hot' : '') },
+      h('div', { class: 'oh' }, h('span', null, w.title), h('span', { class: 'lvl ' + cls }, level.toUpperCase())),
+      h('div', { class: 'ob' },
+        h('div', { class: 'muted small' }, w.war ? 'The invasion has begun.' : 'Intelligence estimate: ' + w.subject.toLowerCase()),
+        h('div', { class: 'est num' }, w.war ? '—' : `~${Math.round(w.est / 1000)}k troops`),
+        h('div', { html: svg }),
+        h('div', { class: 'small' }, `Observed on the map: `, h('b', null, `${observedNearBorder(g)} divisions`), ' within two hexes of the border')));
   }
 
   // ------------------------------------------------------------------ selection panel

@@ -15,7 +15,7 @@ IM.SUPERS = {
       POL: 'At 04:45 the guns of the Schleswig-Holstein open fire on Westerplatte. Across the whole length of our western frontier, from Pomerania to the Carpathians, German armour and infantry are pouring into Poland, and the Luftwaffe is bombing our airfields, bridges and cities. The Army must hold the line of the Vistula and buy time until Britain and France can strike in the west. Warsaw will not surrender.',
       DEU: 'At 04:45 the Schleswig-Holstein opens fire on Westerplatte, and Fall Weiss begins. Army Group North drives from Pomerania and East Prussia to cut the Corridor; Army Group South strikes from Silesia and Slovakia toward Kraków and Warsaw. Poland must be destroyed before the Western powers can act.',
     },
-    art: { kind: 'map', focus: 'Warsaw', span: 22, red: ['DEU', 'SVK'], blue: ['POL'], axes: [['Olsztyn', 'Warsaw'], ['Szczecin', 'Poznan'], ['Gdansk', 'Bialystok'], ['Wroclaw', 'Lodz'], ['Bratislava', 'Krakow']] },
+    art: { kind: 'map', focus: 'Warsaw', span: 22, red: ['DEU', 'SVK'], blue: ['POL'], strikes: [['Olsztyn', 'Warsaw'], ['Wroclaw', 'Krakow'], ['Szczecin', 'Poznan'], ['Wroclaw', 'Lodz']], axes: [['Olsztyn', 'Warsaw'], ['Szczecin', 'Poznan'], ['Gdansk', 'Bialystok'], ['Wroclaw', 'Lodz'], ['Bratislava', 'Krakow']] },
   },
   barbarossa: {
     title: 'Operation Barbarossa',
@@ -26,7 +26,7 @@ IM.SUPERS = {
     textFor: {
       SOV: 'Before dawn, German artillery opens fire along the entire western frontier. Our airfields have been bombed; entire air regiments are burning on the ground. Panzer groups are already deep behind the border armies near Brest and Grodno. Comrade Molotov will speak to the nation at noon: "Our cause is just. The enemy will be beaten. Victory will be ours." Trade space for time — and hold Moscow.',
     },
-    art: { kind: 'map', focus: 'Minsk', span: 40, red: ['DEU', 'ROU', 'HUN', 'SVK', 'FIN', 'ITA', 'HRV'], blue: ['SOV'], axes: [['Kaliningrad', 'Riga'], ['Riga', 'Leningrad'], ['Warsaw', 'Minsk'], ['Minsk', 'Smolensk'], ['Smolensk', 'Moscow'], ['Lublin', 'Kyiv'], ['Iasi', 'Odesa']] },
+    art: { kind: 'map', focus: 'Minsk', span: 40, red: ['DEU', 'ROU', 'HUN', 'SVK', 'FIN', 'ITA', 'HRV'], blue: ['SOV'], strikes: [['Warsaw', 'Minsk'], ['Lublin', 'Kyiv'], ['Kaliningrad', 'Kaunas'], ['Iasi', 'Odesa'], ['Warsaw', 'Brest-Litovsk']], axes: [['Kaliningrad', 'Riga'], ['Riga', 'Leningrad'], ['Warsaw', 'Minsk'], ['Minsk', 'Smolensk'], ['Smolensk', 'Moscow'], ['Lublin', 'Kyiv'], ['Iasi', 'Odesa']] },
   },
   pearl_harbor: {
     title: 'A Date Which Will Live in Infamy',
@@ -82,7 +82,24 @@ IM.SUPERS = {
       UKR: 'At 05:00 air-raid sirens sound over Kyiv, Kharkiv, Odesa and Lviv. Cruise and ballistic missiles are hitting our airfields, air-defence batteries and command posts. Russian columns are crossing the border from Belarus toward Chernihiv and Kyiv, from Belgorod toward Kharkiv and Sumy, and from Crimea toward Kherson and Melitopol. Enemy helicopters are landing paratroopers at Hostomel airport, twenty-five kilometres from the capital. The President has declared martial law. Territorial defence brigades are handing out rifles in the streets. The enemy expects Kyiv to fall in three days. Prove them wrong.',
       RUS: 'At dawn the President addresses the nation. Minutes later our missile brigades strike Ukrainian air defences, airfields and headquarters. Battalion tactical groups cross the border on four axes, with the Eastern Military District driving on Kyiv from Belarus. VDV paratroopers are landing at Hostomel to seize the airport and open the road into the capital. The General Staff expects the regime in Kyiv to collapse within days — if it does not, this will become a very different war.',
     },
-    art: { kind: 'map', focus: 'Kyiv', span: 26, red: ['RUS', 'DPR', 'LPR', 'BLR'], blue: ['UKR'], axes: [['Gomel', 'Kyiv'], ['Bryansk', 'Chernihiv'], ['Kursk', 'Sumy'], ['Belgorod', 'Kharkiv'], ['Simferopol', 'Kherson'], ['Rostov', 'Mariupol']] },
+    prelude: { place: 'KYIV · THURSDAY, 24 FEBRUARY 2022', clock: ['04:57', '04:58', '04:59', '05:00'], line: 'The city is asleep. The last trains of the night are empty. On the television, an address from Moscow is beginning.' },
+    feed: [
+      ['04:55', 'Moscow: televised address announces a "special military operation" in Ukraine'],
+      ['05:00', 'Explosions heard in Kyiv, Kharkiv, Odesa, Dnipro and Mariupol'],
+      ['05:10', 'Missile strikes reported on airfields and air-defence sites nationwide'],
+      ['05:30', 'Border guards: attacks from Russia, Belarus and Crimea on several axes'],
+      ['06:00', 'Ukrainian airspace closed to civilian aircraft'],
+      ['06:30', 'President Zelenskyy declares martial law and urges Ukrainians to stay calm'],
+      ['08:00', 'Russian columns cross into Chernihiv, Sumy and Kharkiv regions'],
+      ['11:00', 'Helicopter assault on Antonov Airport, Hostomel — 25 km from Kyiv'],
+      ['14:00', 'Heavy fighting near Chernobyl exclusion zone'],
+      ['18:00', 'Queues at recruitment offices; rifles handed out in Kyiv'],
+    ],
+    art: {
+      kind: 'map', focus: 'Kyiv', span: 21, red: ['RUS', 'DPR', 'LPR', 'BLR'], blue: ['UKR'],
+      strikes: [['Gomel', 'Kyiv'], ['Belgorod', 'Kharkiv'], ['Simferopol', 'Odesa'], ['Rostov', 'Dnipro'], ['Brest-Litovsk', 'Lviv'], ['Gomel', 'Kyiv'], ['Simferopol', 'Mykolaiv'], ['Kursk', 'Chernihiv'], ['Rostov', 'Mariupol'], ['Belgorod', 'Poltava'], ['Simferopol', 'Zaporizhzhia'], ['Bryansk', 'Vinnytsia']],
+      axes: [['Gomel', 'Kyiv'], ['Bryansk', 'Chernihiv'], ['Kursk', 'Sumy'], ['Belgorod', 'Kharkiv'], ['Simferopol', 'Kherson'], ['Rostov', 'Mariupol']],
+    },
   },
   taiwan: {
     title: 'The Strait on Fire',

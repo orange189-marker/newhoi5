@@ -278,6 +278,56 @@ window.IM = window.IM || {};
       ],
     },
     {
+      id: 'rus_buildup', eras: ['2021'], date: [2021, 10, 20], actor: 'RUS', title: 'Operation Order for the Western Border',
+      text: 'The General Staff proposes moving combined-arms armies from Siberia and the Far East to field camps near Ukraine, officially for "snap readiness checks". Once there, the troops can stay for months — and strike at short notice.',
+      cond: G => alive(G, 'RUS') && alive(G, 'UKR'),
+      options: [
+        { label: 'Begin the deployment', fx: G => { (G.flags = G.flags || {}).rusBuildup = true; } },
+        { label: 'Keep the army in its garrisons', fx: G => { (G.flags = G.flags || {}).rusBuildup = false; } },
+      ],
+    },
+    {
+      id: 'ukr_warning', eras: ['2021'], date: [2021, 12, 4], actor: 'UKR', title: 'The Warnings from Washington',
+      headline: 'KYIV WEIGHS WESTERN WARNINGS OF INVASION', news: `Ukraine's leadership is studying American and British intelligence on the Russian buildup, while insisting there is no reason for panic.`,
+      text: 'The Americans and British are briefing us on a Russian plan for a multi-front offensive early next year. Our own intelligence is less alarmed. Preparing openly could frighten investors and the public — but if the warnings are right, every week counts.',
+      cond: G => alive(G, 'UKR') && alive(G, 'RUS') && !IM.War.isEnemy(G, G.tagId.UKR, G.tagId.RUS),
+      options: [
+        {
+          label: 'Quietly fortify the northern and eastern borders (30 PP)', fx: G => {
+            const u = byTag(G, 'UKR'); u.pp = Math.max(0, u.pp - 30); u.stab = Math.max(0, u.stab - 0.02);
+            const foes = ['RUS', 'BLR', 'DPR', 'LPR'].map(t => G.tagId[t]).filter(x => x !== undefined);
+            for (const h of G.W.land) { if (G.ctrl[h] !== u.id) continue; for (const j of G.W.neighbors(h)) if (foes.includes(G.ctrl[j])) { G.fort[h] = Math.min(5, G.fort[h] + 1); break; } }
+            u.watchThreats = [G.tagId.RUS];
+          },
+        },
+        { label: 'Avoid panic: keep the economy calm', fx: G => { const u = byTag(G, 'UKR'); u.stab = Math.min(1, u.stab + 0.05); u.pp += 20; } },
+      ],
+    },
+    {
+      id: 'ukr_javelins', eras: ['2021'], date: [2022, 1, 25], actor: 'UKR', title: 'Anti-Tank Weapons from Our Partners',
+      headline: 'WESTERN ANTI-TANK WEAPONS ARRIVE IN KYIV', news: `Transport aircraft from the United States and Britain are landing at Boryspil with Javelin and NLAW anti-tank missiles, as Western capitals rush defensive weapons to Ukraine.`,
+      text: 'Cargo planes from America, Britain and the Baltic states are landing at Boryspil with crates of Javelin and NLAW anti-tank missiles. Instructors are already training our infantry to use them.',
+      cond: G => alive(G, 'UKR'),
+      options: [{ label: 'Get them to the front', fx: G => { const u = byTag(G, 'UKR'); u.stock.inf += 4000; u.stock.art += 80; u.fmods.ha = (u.fmods.ha || 0) + 0.4; IM.Game.recomputeMods(G, u); } }],
+    },
+    {
+      id: 'rus_recognize', eras: ['2021'], date: [2022, 2, 21], actor: 'RUS', title: 'Recognising the People\'s Republics',
+      headline: 'RUSSIA RECOGNISES DONETSK AND LUHANSK "REPUBLICS"', news: `In a televised hour-long address, the Russian president recognises the independence of the two separatist regions and orders troops in as "peacekeepers". Western capitals call it the end of the Minsk agreements.`,
+      text: 'The Security Council has spoken, one after another, in favour of recognising the Donetsk and Luhansk People\'s Republics. Recognition would tear up the Minsk agreements and let our troops enter the Donbas openly.',
+      cond: G => alive(G, 'RUS') && alive(G, 'UKR') && !IM.War.isEnemy(G, G.tagId.RUS, G.tagId.UKR),
+      options: [
+        { label: 'Sign the decrees', fx: G => { G.tension = Math.min(100, G.tension + 10); const r = byTag(G, 'RUS'); for (const t of G.countries) if (t.alive && t.faction >= 0 && G.factions[t.faction].name === 'NATO') r.sanctionedBy.add(t.id); } },
+        { label: 'Keep the Minsk process alive', fx: G => { G.tension = Math.max(0, G.tension - 10); } },
+      ],
+    },
+    {
+      id: 'ukr_emergency', eras: ['2021'], date: [2022, 2, 23], actor: 'UKR', title: 'State of Emergency',
+      headline: 'UKRAINE DECLARES STATE OF EMERGENCY', news: `Parliament approves a 30-day state of emergency and reservists aged 18 to 60 are called up. Ukrainians in Russia are urged to leave immediately.`,
+      text: 'The National Security Council recommends a nationwide state of emergency and the call-up of reservists. The Russian embassy has been evacuated. Diplomats say the attack could come within hours.',
+      cond: G => alive(G, 'UKR') && alive(G, 'RUS') && !IM.War.isEnemy(G, G.tagId.UKR, G.tagId.RUS),
+      options: [{ label: 'Call up the reserves', fx: G => { const u = byTag(G, 'UKR'); u.laws.draft = Math.max(u.laws.draft, 2); u.ws = Math.min(1, u.ws + 0.1); u.watchThreats = [G.tagId.RUS]; } }],
+    },
+    {
       id: 'ukr_martial', eras: ['2021', '2022'], date: [2022, 2, 24], actor: 'UKR', title: 'We Are All Here',
       headline: 'ZELENSKYY: "I NEED AMMUNITION, NOT A RIDE"', news: `Ukraine's president has refused offers to evacuate him from Kyiv, declaring general mobilisation as volunteers queue outside recruitment offices across the country.`,
       text: 'Our allies are offering to fly the President out of Kyiv tonight. Outside the Presidential Office, volunteers are queuing for rifles. The world is watching to see whether Ukraine\'s government will stay or go. "The fight is here. I need ammunition, not a ride."',
@@ -353,8 +403,58 @@ window.IM = window.IM || {};
   ];
   E.list = EV;
 
+  // ------------------------------------------------------------ background news timelines
+  E.WATCH_LEVELS = [[60000, 'Low'], [110000, 'Elevated'], [150000, 'High'], [Infinity, 'Severe']];
+  E.checkTimeline = function (G, now) {
+    const tl = (IM.TIMELINES || {})[G.eraId];
+    if (!tl) return;
+    const done = G.tlDone || (G.tlDone = []);
+    const tgt = tl.watch && byTag(G, tl.watch.target), thr = tl.watch && tl.watch.threat.map(t => byTag(G, t)).filter(Boolean);
+    const atWar = tgt && thr.some(t => IM.War.isEnemy(G, t.id, tgt.id));
+    if (tl.watch && !G.watch) G.watch = { title: tl.watch.title, subject: tl.watch.subject, est: 20000, hist: [[G.hour, 20000]], target: tl.watch.target, threat: tl.watch.threat };
+    if (G.watch && atWar && !G.watch.war) { G.watch.war = true; G.camps = []; G.mapDirty = true; }
+    tl.items.forEach((it, i) => {
+      if (done.includes(i)) return;
+      const t = Date.UTC(it.date[0], it.date[1] - 1, it.date[2]);
+      if (now < t) return;
+      done.push(i);
+      if (now > t + 20 * 864e5 || atWar) return;
+      if (it.watch && G.watch) { G.watch.est = it.watch; G.watch.hist.push([G.hour, it.watch]); }
+      if (it.tension) G.tension = Math.min(100, G.tension + it.tension);
+      if (it.stage) E.stage(G, it.stage);
+      if (it.camps) { G.camps = G.camps || []; for (const [city, lvl] of Object.entries(it.camps)) { const c = G.camps.find(x => x.city === city); if (c) c.level = Math.max(c.level, lvl); else G.camps.push({ city, level: lvl }); } G.mapDirty = true; }
+      if (it.effect === 'cyberUKR') { const u = byTag(G, 'UKR'); if (u) u.cyberDays = Math.max(u.cyberDays, 10); }
+      if (tgt && it.tone !== 'calm' && it.watch >= 90000 && !tgt.isPlayer) tgt.watchThreats = thr.map(x => x.id);
+      { const first = it.text.split(/(?<=\.)\s/)[0]; IM.Game.news(G, first.length > 120 ? first.slice(0, 117) + '…' : first, it.tone === 'alarm' ? 'bad' : 'info'); }
+      IM.Game.headline(G, { type: 'news', tone: it.tone, major: it.tone !== 'calm', title: it.title, text: it.text, art: it.art, tags: (it.art && it.art.flags) || (it.art && it.art.red ? [it.art.red[0], it.art.blue[0]] : []) });
+    });
+  };
+  E.watchLevel = est => E.WATCH_LEVELS.find(([m]) => est < m)[1];
+
+  // Move Russian divisions (AI, or the player once they approve the deployment) to staging areas.
+  E.stage = function (G, stage) {
+    const r = byTag(G, 'RUS');
+    if (!r || !r.alive || (r.isPlayer && !(G.flags && G.flags.rusBuildup))) return;
+    for (const [city, n] of Object.entries(stage)) {
+      const st = G.W.stateByName[city]; if (!st) continue;
+      const target = st.cityHex;
+      const pool = G.divisions.filter(d => d.owner === r.id && !d.staged && d.battle < 0).sort((a, b) => G.W.hexDist(a.hex, target) - G.W.hexDist(b.hex, target));
+      for (let k = 0; k < n; k++) {
+        let d = pool.shift();
+        if (!d || G.W.hexDist(d.hex, target) < 3) {
+          const tpl = k % 3 === 2 ? 'arm' : 'mec';
+          d = IM.War.spawnDivision(G, r, r.mods.mechanized ? tpl : 'inf', IM.Game.deployHex(G, r), 1);
+          r.mpUsed += IM.TEMPLATES[d.tpl].mp;
+        }
+        d.staged = true; d.auto = !r.isPlayer;
+        IM.War.orderMove(G, [d], target);
+      }
+    }
+  };
+
   E.check = function (G) {
     const now = IM.Game.dateOf(G).getTime();
+    E.checkTimeline(G, now);
     for (const ev of EV) {
       if (G.firedEvents.has(ev.id) || !ev.eras.includes(G.eraId)) continue;
       const t = Date.UTC(ev.date[0], ev.date[1] - 1, ev.date[2]);

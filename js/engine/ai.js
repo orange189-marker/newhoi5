@@ -335,7 +335,11 @@ window.IM = window.IM || {};
       if (!o.alive || o.id === c.id) continue;
       if (o.wargoals.has(c.id) || (o.justify && o.justify.target === c.id) || c.wargoals.has(o.id)) threats.add(o.id);
     }
-    const mine = G.divisions.filter(d => d.owner === c.id && !d.path.length);
+    for (const t of c.watchThreats || []) {
+      threats.add(t);
+      for (const o of G.countries) if (o.alive && o.id !== c.id && War().relation(G, t, o.id) === 1 && War().relation(G, c.id, o.id) === 0) threats.add(o.id);
+    }
+    const mine = G.divisions.filter(d => d.owner === c.id && !d.path.length && !d.staged);
     // anyone stranded in foreign land goes home
     for (const d of mine) if (G.ctrl[d.hex] !== c.id && War().relation(G, c.id, G.ctrl[d.hex]) !== 1) War().orderMove(G, [d], Game().deployHex(G, c));
     if (!threats.size) return;

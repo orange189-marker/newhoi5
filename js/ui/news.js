@@ -50,7 +50,7 @@ window.IM = window.IM || {};
     const flags = (it.tags || []).filter(Boolean).slice(0, 4).map(t => flagOf(G, t));
     newsEl = h('aside', { class: 'newsp ' + (ww2 ? 'ww2' : 'modern'), role: 'dialog', 'aria-label': 'News' },
       ww2 ? h('header', { class: 'np-mast' }, h('div', { class: 'np-rule' }, h('span', null, 'Late City Edition'), h('span', null, dateText(G, it)), h('span', null, 'One Penny')), h('div', { class: 'np-name' }, 'The Evening Dispatch'), h('div', { class: 'np-rule thin' }))
-        : h('header', { class: 'np-mast' }, h('div', { class: 'np-logo' }, h('b', null, 'MNN'), h('span', null, 'Meridian News Network')), h('div', { class: 'np-breaking' }, h('span', { class: 'live' }, 'LIVE'), 'BREAKING NEWS', h('span', { class: 'np-date' }, dateText(G, it)))),
+        : h('header', { class: 'np-mast' }, h('div', { class: 'np-logo' }, h('b', null, 'MNN'), h('span', null, 'Meridian News Network')), h('div', { class: 'np-breaking tone-' + (it.tone || 'alarm') }, h('span', { class: 'live' }, 'LIVE'), it.tone === 'calm' ? 'TOP STORY' : it.tone === 'warn' ? 'DEVELOPING STORY' : 'BREAKING NEWS', h('span', { class: 'np-date' }, dateText(G, it)))),
       h('div', { class: 'np-body' },
         h('h2', { class: 'np-head' }, it.title),
         art,
@@ -87,6 +87,7 @@ window.IM = window.IM || {};
       title: (base.titleFor && base.titleFor[me.tag]) || base.title,
       text: (base.textFor && base.textFor[me.tag]) || base.text,
       quote: base.quote, quoteBy: base.quoteBy, time: base.time, art: base.art,
+      prelude: base.prelude, feed: (base.feedFor && base.feedFor[me.tag]) || base.feed,
       tags: base.art && base.art.red ? [base.art.red[0], base.art.blue[0]] : (base.art && base.art.flags) || it.tags,
     } : { title: it.title, text: it.text, quote: it.quote, quoteBy: it.quoteBy, art: it.art, tags: it.tags };
     const wasPaused = IM.UI.paused;
@@ -100,34 +101,59 @@ window.IM = window.IM || {};
       : tags.length ? h('div', { class: 'sup-flags' }, tags.slice(0, 3).map(t => flagOf(G, t))) : null;
     const mute = h('button', { class: 'btn small sup-mute', title: 'Sound', onclick: () => { N.muted = !N.muted; store.set('muted', N.muted ? '1' : '0'); mute.textContent = N.muted ? '🔇 Sound off' : '🔊 Sound on'; if (N.muted) stopSound(); } }, N.muted ? '🔇 Sound off' : '🔊 Sound on');
     let typing = null;
-    const finishTyping = () => { if (typing) { clearInterval(typing); typing = null; text.textContent = S.text; text.classList.add('done'); } };
-    const close = () => { finishTyping(); closeSuper(); IM.UI.paused = wasPaused; if (IM.Panels) IM.Panels.refresh(true); };
-    superEl = h('div', { class: 'super', role: 'dialog', 'aria-label': S.title },
-      art, h('div', { class: 'sup-shade' }),
-      h('div', { class: 'sup-content', onclick: finishTyping },
-        h('div', { class: 'sup-kicker' }, dateText(G, it).toUpperCase() + (S.time ? ` · ${S.time}` : '')),
-        h('h1', { class: 'sup-title' }, S.title.split('').map((ch, i) => h('span', { style: { animationDelay: `${0.4 + i * 0.035}s` } }, ch))),
-        flags,
-        S.quote ? h('blockquote', { class: 'sup-quote' }, `“${S.quote}”`, h('cite', null, '— ' + S.quoteBy)) : null,
-        text,
-        h('div', { class: 'sup-actions' }, mute, h('button', { class: 'btn primary', onclick: close }, 'Continue'))));
+    const timers = [];
+    const later = (ms, fn) => timers.push(setTimeout(fn, ms));
+    const finishTyping = () => { if (typing) { clearInterval(typing); typing = null; } text.textContent = S.text; text.classList.add('done'); };
+    const close = () => { timers.forEach(clearTimeout); finishTyping(); closeSuper(); IM.UI.paused = wasPaused; if (IM.Panels) IM.Panels.refresh(true); };
+    const feed = S.feed ? h('aside', { class: 'sup-feed', 'aria-label': 'Live updates' }, h('div', { class: 'sf-head' }, h('span', { class: 'live' }, 'LIVE'), 'Updates')) : null;
+    const content = h('div', { class: 'sup-content', onclick: finishTyping },
+      h('div', { class: 'sup-kicker' }, dateText(G, it).toUpperCase() + (S.time ? ` · ${S.time}` : '')),
+      h('h1', { class: 'sup-title' }, S.title.split('').map((ch, i) => h('span', { style: { animationDelay: `${0.4 + i * 0.035}s` } }, ch))),
+      flags,
+      S.quote ? h('blockquote', { class: 'sup-quote' }, `“${S.quote}”`, h('cite', null, '— ' + S.quoteBy)) : null,
+      text,
+      h('div', { class: 'sup-actions' }, mute, h('button', { class: 'btn primary', onclick: close }, 'Continue')));
+    superEl = h('div', { class: 'super', role: 'dialog', 'aria-label': S.title }, art, h('div', { class: 'sup-shade' }), feed, content, h('div', { class: 'sup-grain' }));
     root.appendChild(superEl);
-    // typewriter
-    if (reduced()) { text.textContent = S.text; text.classList.add('done'); }
-    else {
-      let i = 0;
-      setTimeout(() => { typing = setInterval(() => { i += 2; text.textContent = S.text.slice(0, i); if (i >= S.text.length) finishTyping(); }, 28); }, 1600);
-    }
-    const t0 = performance.now();
-    const loop = () => {
+    const artSpec = S.art || { kind: 'flags', flags: tags };
+    const strikes = (artSpec.strikes || []).length;
+
+    // main sequence: map, missile strikes, advancing arrows, live feed, typed account
+    const startMain = () => {
       if (!superEl) return;
-      const t = (performance.now() - t0) / 1000;
-      drawArt(art, S.art || { kind: 'flags', flags: tags }, G, 'super', Math.min(1, Math.max(0, (t - 0.6) / 4)), t);
-      anim = requestAnimationFrame(loop);
+      content.classList.add('go');
+      if (reduced()) { finishTyping(); drawArt(art, artSpec, G, 'super', 1, 12); if (feed) S.feed.forEach(f => feed.appendChild(feedItem(f))); return; }
+      later(1600 + strikes * 250, () => { let i = 0; typing = setInterval(() => { i += 2; text.textContent = S.text.slice(0, i); if (i >= S.text.length) finishTyping(); }, 26); });
+      if (feed) S.feed.forEach((f, i) => later(900 + i * 1500, () => { if (superEl) { feed.appendChild(feedItem(f)); feed.scrollTop = feed.scrollHeight; } }));
+      const t0 = performance.now();
+      const impacts = (artSpec.strikes || []).map((_, i) => 0.4 + i * 0.32 + 1.1);
+      let nextImpact = 0;
+      const arrowsFrom = strikes ? 0.6 + strikes * 0.32 + 1.2 : 0.6;
+      const loop = () => {
+        if (!superEl) return;
+        const t = (performance.now() - t0) / 1000;
+        drawArt(art, artSpec, G, 'super', Math.min(1, Math.max(0, (t - arrowsFrom) / 4)), t);
+        // screen shake and a thud on each missile impact
+        let shake = 0;
+        for (const ti of impacts) if (t >= ti && t < ti + 0.35) shake = Math.max(shake, 1 - (t - ti) / 0.35);
+        art.style.transform = shake ? `translate(${(Math.random() - 0.5) * 14 * shake}px, ${(Math.random() - 0.5) * 10 * shake}px) scale(1.01)` : '';
+        while (nextImpact < impacts.length && t >= impacts[nextImpact]) { if (!N.muted) sound('impact'); nextImpact++; }
+        anim = requestAnimationFrame(loop);
+      };
+      loop();
+      if (!N.muted) sound(artSpec.kind === 'nuke' ? 'nuke' : artSpec.kind === 'map' ? 'war' : 'toll');
     };
-    if (reduced()) drawArt(art, S.art || { kind: 'flags', flags: tags }, G, 'super', 1, 5); else loop();
-    if (!N.muted) sound(S.art && S.art.kind === 'nuke' ? 'nuke' : S.art && S.art.kind === 'map' ? 'war' : 'toll');
+
+    // optional prelude: black screen, a clock ticking toward the hour
+    if (S.prelude && !reduced()) {
+      const clock = h('div', { class: 'sp-clock num' }, S.prelude.clock[0]);
+      const pre = h('div', { class: 'sup-prelude' }, h('div', { class: 'sp-place' }, S.prelude.place), clock, h('div', { class: 'sp-line' }, S.prelude.line || ''), h('button', { class: 'btn small sp-skip', onclick: () => { timers.forEach(clearTimeout); pre.remove(); startMain(); } }, 'Skip'));
+      superEl.appendChild(pre);
+      S.prelude.clock.forEach((c, i) => later(i * 1100, () => { clock.textContent = c; clock.classList.remove('tick'); void clock.offsetWidth; clock.classList.add('tick'); if (i && !N.muted) sound('tick'); }));
+      later(S.prelude.clock.length * 1100 + 200, () => { pre.classList.add('flash'); if (!N.muted) sound('impact'); later(700, () => { pre.remove(); startMain(); }); });
+    } else startMain();
   }
+  function feedItem([time, msg]) { return h('div', { class: 'sf-item' }, h('b', { class: 'num' }, time), h('span', null, msg)); }
   function closeSuper(silent) {
     if (anim) cancelAnimationFrame(anim); anim = null;
     if (superEl) superEl.remove(); superEl = null;
@@ -151,6 +177,7 @@ window.IM = window.IM || {};
     else if (kind === 'nuke') drawNuke(ctx, cw, ch, style, t);
     else if (kind === 'navy') drawNavy(ctx, cw, ch, style, t);
     else if (kind === 'city') drawCity(ctx, cw, ch, style, t);
+    else if (kind === 'satellite') drawSatellite(ctx, cw, ch, art, G, t);
     else drawFlags(ctx, cw, ch, art || {}, G, style, t);
     if (style === 'ww2') newsprint(ctx, cw, ch);
     if (style === 'super') { const g = ctx.createRadialGradient(cw / 2, ch * 0.45, ch * 0.2, cw / 2, ch / 2, cw * 0.7); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.85)'); ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch); }
@@ -167,7 +194,7 @@ window.IM = window.IM || {};
     const fh = st ? st.cityHex : W.states[G.countries[G.player].capital].cityHex;
     const zoom = style === 'super' ? 1 + Math.min(t / 25, 1) * 0.1 : 1;
     const viewW = (art.span || 24) * R.HW * 1.35 / zoom, viewH = viewW * ch / cw;
-    const x0 = R.cx[fh] - viewW / 2, y0 = R.cy[fh] - viewH * (style === 'super' ? 0.4 : 0.5), sc = cw / viewW;
+    const x0 = R.cx[fh] - viewW / 2, y0 = R.cy[fh] - viewH * (style === 'super' ? 0.33 : 0.5), sc = cw / viewW;
     const S = R.HW / Math.sqrt(3) * sc * 1.04;
     ctx.fillStyle = P.sea; ctx.fillRect(0, 0, cw, ch);
     const red = new Set(art.red || []), blue = new Set(art.blue || []);
@@ -196,6 +223,7 @@ window.IM = window.IM || {};
     ctx.strokeStyle = P.border; ctx.lineWidth = Math.max(1.2, S * 0.12); ctx.stroke(b);
     // arrows
     const labels = new Set(art.mark ? [art.mark] : []);
+    if (style === 'super') for (const [, to] of art.strikes || []) labels.add(to);
     (art.axes || []).forEach(([from, to], n) => {
       const A = W.stateByName[from], B = W.stateByName[to];
       if (!A || !B) return;
@@ -204,15 +232,47 @@ window.IM = window.IM || {};
       if (p <= 0) return;
       arrow(ctx, X(A.cityHex), Y(A.cityHex), X(B.cityHex), Y(B.cityHex), p, P, cw, style, t, n);
     });
+    // missile strikes: trails from launch areas, then impacts that burn on
+    (art.strikes || []).forEach(([from, to], i) => {
+      if (style !== 'super') return;
+      const A = W.stateByName[from], B = W.stateByName[to];
+      if (!A || !B) return;
+      const t0 = 0.4 + i * 0.32, t1 = t0 + 1.1;
+      if (t < t0) return;
+      const x1 = X(A.cityHex), y1 = Y(A.cityHex), x2 = X(B.cityHex) + ((i * 37) % 11 - 5) * S * 0.25, y2 = Y(B.cityHex) + ((i * 53) % 9 - 4) * S * 0.25;
+      const u = Math.min(1, (t - t0) / (t1 - t0));
+      const cx = (x1 + x2) / 2, cy = Math.min(y1, y2) - Math.hypot(x2 - x1, y2 - y1) * 0.35;
+      const at = v => [(1 - v) * (1 - v) * x1 + 2 * (1 - v) * v * cx + v * v * x2, (1 - v) * (1 - v) * y1 + 2 * (1 - v) * v * cy + v * v * y2];
+      if (u < 1) {
+        ctx.beginPath();
+        for (let k = 0; k <= 24; k++) { const v = Math.max(0, u - 0.35) + (u - Math.max(0, u - 0.35)) * k / 24; const [px, py] = at(v); k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+        ctx.strokeStyle = 'rgba(255,230,190,0.55)'; ctx.lineWidth = cw * 0.0025; ctx.stroke();
+        const [hx, hy] = at(u);
+        const g = ctx.createRadialGradient(hx, hy, 0, hx, hy, cw * 0.008); g.addColorStop(0, '#fff'); g.addColorStop(1, 'rgba(255,160,60,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(hx, hy, cw * 0.008, 0, 7); ctx.fill();
+      } else {
+        const age = t - t1, flare = Math.max(0, 1 - age / 0.8), glow = 0.35 + 0.15 * Math.sin(t * 9 + i);
+        const rad = cw * (0.012 + flare * 0.05);
+        const g = ctx.createRadialGradient(x2, y2, 0, x2, y2, rad);
+        g.addColorStop(0, `rgba(255,250,220,${0.4 + flare * 0.6})`); g.addColorStop(0.35, `rgba(255,140,40,${glow + flare * 0.5})`); g.addColorStop(1, 'rgba(120,20,0,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x2, y2, rad, 0, 7); ctx.fill();
+        if (flare > 0) { ctx.strokeStyle = `rgba(255,220,180,${flare})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x2, y2, cw * 0.06 * (1 - flare), 0, 7); ctx.stroke(); }
+      }
+    });
     // city labels
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    const fs = Math.round(cw * 0.022);
-    for (const name of labels) {
+    const fs = Math.round(cw * (style === 'super' ? 0.0145 : 0.022));
+    ctx.font = `700 ${fs}px Georgia, serif`;
+    const placed = [];
+    const order = [...labels].sort((a, b) => (b === art.focus) - (a === art.focus));
+    for (const name of order) {
       const s = W.stateByName[name]; if (!s) continue;
       const x = X(s.cityHex), y = Y(s.cityHex);
       ctx.fillStyle = P.text; ctx.strokeStyle = P.halo; ctx.lineWidth = fs * 0.28;
-      ctx.beginPath(); ctx.arc(x, y, fs * 0.28, 0, 7); ctx.fill(); ctx.stroke();
-      ctx.font = `700 ${fs}px Georgia, serif`;
+      ctx.beginPath(); ctx.arc(x, y, fs * 0.25, 0, 7); ctx.fill(); ctx.stroke();
+      const w = ctx.measureText(name).width, box = [x - w / 2 - 4, y - fs * 1.5, x + w / 2 + 4, y - fs * 0.3];
+      if (placed.some(p => box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1])) continue;
+      placed.push(box);
       ctx.strokeText(name, x, y - fs * 0.45); ctx.fillText(name, x, y - fs * 0.45);
     }
     if (style === 'super') { // flashes along the front
@@ -337,6 +397,48 @@ window.IM = window.IM || {};
     for (const [tx, w, hh] of towers) for (let i = 0; i < 6; i++) if (r() > 0.6) ctx.fillRect(tx + w * r() * 0.8, ch * 0.78 - hh * r(), 2, 2);
   }
 
+  // Commercial-satellite style photo of a field camp: rows of vehicles and tents.
+  let satTex = null;
+  function drawSatellite(ctx, cw, ch, art, G, t) {
+    if (!satTex || satTex.width !== cw) {
+      satTex = document.createElement('canvas'); satTex.width = cw; satTex.height = ch;
+      const x = satTex.getContext('2d'), r = rnd(5);
+      x.fillStyle = '#6d7560'; x.fillRect(0, 0, cw, ch);
+      for (let i = 0; i < 2600; i++) { x.fillStyle = `rgba(${40 + r() * 60},${50 + r() * 50},${35 + r() * 40},${0.08 + r() * 0.15})`; x.fillRect(r() * cw, r() * ch, 2 + r() * 30, 2 + r() * 30); }
+      for (let i = 0; i < 70; i++) { x.fillStyle = `rgba(30,40,25,${0.25 + r() * 0.3})`; x.beginPath(); x.arc(r() * cw, r() * ch * 0.35, 4 + r() * 14, 0, 7); x.fill(); } // tree line
+      x.strokeStyle = 'rgba(190,180,150,0.7)'; x.lineWidth = 7;
+      x.beginPath(); x.moveTo(0, ch * 0.42); x.bezierCurveTo(cw * 0.3, ch * 0.38, cw * 0.6, ch * 0.5, cw, ch * 0.46); x.stroke();
+    }
+    ctx.drawImage(satTex, 0, 0);
+    const r = rnd(9), total = art.vehicles || 200;
+    const shown = Math.floor(total * Math.min(1, 0.35 + t / 2.5));
+    const rows = Math.ceil(Math.sqrt(total / 3)), cols = Math.ceil(total / rows);
+    const x0 = cw * 0.1, y0 = ch * 0.5, dx = (cw * 0.62) / cols, dy = (ch * 0.42) / rows;
+    for (let i = 0; i < shown; i++) {
+      const c = i % cols, rr = Math.floor(i / cols);
+      const x = x0 + c * dx + (rr % 2) * dx * 0.3, y = y0 + rr * dy;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x + 1.5, y + 1.5, dx * 0.55, dy * 0.32);
+      ctx.fillStyle = r() > 0.8 ? '#4e5540' : '#3a3f2e'; ctx.fillRect(x, y, dx * 0.55, dy * 0.32);
+    }
+    for (let i = 0; i < Math.min(40, total / 8); i++) { // tents
+      const x = cw * 0.77 + (i % 5) * cw * 0.035, y = ch * 0.52 + Math.floor(i / 5) * ch * 0.05;
+      ctx.fillStyle = '#b7b39a'; ctx.fillRect(x, y, cw * 0.022, ch * 0.028);
+    }
+    // analyst annotations
+    const box = (x, y, w, hh, label) => {
+      ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 2; const k = 12;
+      ctx.beginPath(); ctx.moveTo(x, y + k); ctx.lineTo(x, y); ctx.lineTo(x + k, y); ctx.moveTo(x + w - k, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + k);
+      ctx.moveTo(x + w, y + hh - k); ctx.lineTo(x + w, y + hh); ctx.lineTo(x + w - k, y + hh); ctx.moveTo(x + k, y + hh); ctx.lineTo(x, y + hh); ctx.lineTo(x, y + hh - k); ctx.stroke();
+      ctx.font = `700 ${Math.round(cw * 0.018)}px system-ui, sans-serif`; ctx.fillStyle = '#ffd24a'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom'; ctx.fillText(label, x, y - 4);
+    };
+    box(x0 - 10, y0 - 10, cw * 0.62 + 10, ch * 0.44, `ARMOURED VEHICLES (${total}+)`);
+    box(cw * 0.76, ch * 0.5, cw * 0.2, ch * 0.4, 'TENTS / FIELD HOSPITAL');
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, cw, ch * 0.075);
+    ctx.font = `600 ${Math.round(cw * 0.017)}px ui-monospace, Menlo, monospace`; ctx.fillStyle = '#e6e6e6'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    ctx.fillText(`COMMERCIAL SATELLITE IMAGE · ${(art.place || '').toUpperCase()} · ${dateText(G, {}).toUpperCase()}`, cw * 0.02, ch * 0.0375);
+    ctx.fillStyle = '#fff'; ctx.fillRect(cw * 0.04, ch * 0.93, cw * 0.1, 3); ctx.fillText('100 m', cw * 0.15, ch * 0.935);
+  }
+
   function drawFlags(ctx, cw, ch, art, G, style, t) {
     const bg = ctx.createLinearGradient(0, 0, 0, ch);
     bg.addColorStop(0, style === 'ww2' ? '#d8cbab' : '#18212a'); bg.addColorStop(1, style === 'ww2' ? '#b9a883' : '#0b1015');
@@ -407,6 +509,11 @@ window.IM = window.IM || {};
       } else if (kind === 'toll') {
         env(0.35, 0.02, 0.3, 4);
         for (const [fq, gv] of [[110, 0.5], [220, 0.25], [331, 0.15], [440, 0.08]]) { const o = actx.createOscillator(), g = actx.createGain(); o.frequency.value = fq; g.gain.value = gv; o.connect(g); g.connect(out); o.start(now); o.stop(now + 5); }
+      } else if (kind === 'impact') {
+        env(0.6, 0.005, 0.1, 1.4); noise(2, 260);
+      } else if (kind === 'tick') {
+        env(0.08, 0.002, 0.02, 0.08);
+        const o = actx.createOscillator(); o.type = 'square'; o.frequency.value = 1400; o.connect(out); o.start(now); o.stop(now + 0.05);
       } else if (kind === 'press') {
         env(0.12, 0.01, 0.4, 0.4); noise(1, 2500);
       } else {

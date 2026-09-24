@@ -9,7 +9,7 @@ window.IM = window.IM || {};
   S.serialize = function (G) {
     const out = {
       v: 1, eraId: G.eraId, hour: G.hour, nextDiv: G.nextDiv, tension: G.tension, player: G.player,
-      firedEvents: [...G.firedEvents], factions: G.factions, core: G.core, warSeq: G.warSeq, aiMode: G.aiMode,
+      firedEvents: [...G.firedEvents], tlDone: G.tlDone, watch: G.watch, camps: G.camps, flags: G.flags, factions: G.factions, core: G.core, warSeq: G.warSeq, aiMode: G.aiMode,
       wars: G.wars.map(w => ({ ...w, cap: [...w.cap] })),
       news: G.news.slice(0, 30),
       divisions: G.divisions.filter(d => !d.dead).map(d => ({ ...d })),
@@ -34,7 +34,7 @@ window.IM = window.IM || {};
       countries: [], tagId: {}, divisions: o.divisions, nextDiv: o.nextDiv, battles: new Map(), wars: [],
       factions: o.factions, news: o.news, tension: o.tension, rel: null, relDirty: true,
       firedEvents: new Set(o.firedEvents), pendingEvents: [], nukeFlashes: [], supplyDirty: true,
-      player: o.player, modern: !!era.modern, speed: 0, core: o.core, warSeq: o.warSeq, aiMode: o.aiMode,
+      player: o.player, modern: !!era.modern, speed: 0, core: o.core, tlDone: o.tlDone, watch: o.watch, camps: o.camps, flags: o.flags, warSeq: o.warSeq, aiMode: o.aiMode,
     };
     G.owner = Int16Array.from(o.owner); G.ctrl = Int16Array.from(o.ctrl); G.fort = Uint8Array.from(o.fort);
     G.civ = Uint8Array.from(o.civ); G.mil = Uint8Array.from(o.mil); G.slots = Uint8Array.from(o.slots);
