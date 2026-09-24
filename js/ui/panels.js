@@ -98,7 +98,7 @@ window.IM = window.IM || {};
     els.date.className = 'date' + (UI.paused ? ' paused' : '');
     els.pause.textContent = UI.paused ? '▶' : '⏸';
     els.spd.forEach((b, i) => b.classList.toggle('on', i < UI.speed));
-    els.flag.style.background = c.color; els.name.textContent = c.name;
+    els.flag.style.backgroundImage = `url("${IM.flagURL(c)}")`; els.name.textContent = c.name;
     for (const [id, b] of Object.entries(els.side)) b.classList.toggle('on', UI.panel === id);
     // attention dots
     const dot = (id, on) => { const b = els.side[id]; let d = b.querySelector('.dot'); if (on && !d) b.appendChild(h('i', { class: 'dot' })); else if (!on && d) d.remove(); };
@@ -158,7 +158,7 @@ window.IM = window.IM || {};
       const mySide = w.att.includes(c.id) ? 'att' : 'def';
       const foes = w[mySide === 'att' ? 'def' : 'att'].filter(x => g.countries[x].alive && !w.cap.has(x));
       const sc = IM.Diplo.warScore(g, w);
-      return h('div', { class: 'oitem', onclick: () => P.open('diplomacy') }, h('span', { class: 'grow' }, w.name, h('div', { class: 'muted small' }, 'vs ', foes.slice(0, 3).map(x => g.countries[x].tag).join(', '), foes.length > 3 ? '…' : '')),
+      return h('div', { class: 'oitem', onclick: () => P.open('diplomacy') }, h('span', { class: 'grow' }, w.name, h('div', { class: 'flagrow', style: { marginTop: '3px' } }, foes.slice(0, 6).map(x => UI.flag(g.countries[x], 'xs')), foes.length > 6 ? h('span', { class: 'muted small' }, `+${foes.length - 6}`) : null)),
         h('span', { class: 'small ' + (sc[mySide] > sc[mySide === 'att' ? 'def' : 'att'] ? 'bad' : 'good') }, UI.pct(sc[mySide === 'att' ? 'def' : 'att'])));
     }) : h('div', { class: 'muted small' }, 'At peace')));
     els.outliner.appendChild(box('battles', 'Battles', myBattles.length, myBattles.length ? myBattles.slice(0, 12).map(b => {
@@ -410,7 +410,7 @@ window.IM = window.IM || {};
     }
     // factions
     b.appendChild(h('div', { class: 'sec' }, h('h3', null, 'Factions'),
-      g.factions.filter(f => f.members.length).map(f => h('div', { class: 'card small' }, h('b', { class: 'gold' }, f.name), ` — led by ${g.countries[f.leader].name}`, h('div', { class: 'muted' }, f.members.map(m => g.countries[m].tag).join(', ')))),
+      g.factions.filter(f => f.members.length).map(f => h('div', { class: 'card small' }, h('b', { class: 'gold' }, f.name), ` — led by ${g.countries[f.leader].name}`, h('div', { class: 'flagrow', style: { marginTop: '5px' } }, f.members.filter(m => g.countries[m].alive).map(m => { const fl = UI.flag(g.countries[m], 'xs'); fl.style.cursor = 'pointer'; fl.onclick = () => { P.diploTarget = m; renderPanel(); }; return fl; })))),
       c.faction < 0 ? act('Found a faction (50 PP)', () => IM.Diplo.createFaction(g, c)) : act('Leave faction', () => IM.Diplo.leaveFaction(g, c), g.factions[c.faction].leader === c.id ? 'Leaders cannot leave' : null)));
     // wars & peace
     const wars = g.wars.filter(w => w.att.includes(c.id) || w.def.includes(c.id));
@@ -420,7 +420,7 @@ window.IM = window.IM || {};
         const sc = IM.Diplo.warScore(g, w);
         return h('div', { class: 'card' }, h('div', { class: 'row' }, h('b', { class: 'grow' }, w.name), h('span', { class: 'small muted' }, `since ${Math.floor((g.hour - w.start) / 24)} days`)),
           h('div', { class: 'small' }, `Our occupied land: `, h('span', { class: 'bad' }, UI.pct(sc[side])), ' · Enemy occupied land: ', h('span', { class: 'good' }, UI.pct(sc[foe]))),
-          h('div', { class: 'small muted' }, 'Enemies: ', w[foe].filter(x => g.countries[x].alive).map(x => g.countries[x].name + (w.cap.has(x) ? ' (capitulated)' : '')).join(', ')),
+          h('div', { class: 'flagrow', style: { margin: '5px 0' } }, w[foe].filter(x => g.countries[x].alive).map(x => { const f = UI.flag(g.countries[x], 'xs'); if (w.cap.has(x)) f.style.opacity = 0.4; f.title = g.countries[x].name + (w.cap.has(x) ? ' (capitulated)' : ''); f.style.cursor = 'pointer'; f.onclick = () => { P.diploTarget = x; renderPanel(); }; return f; })),
           h('div', { class: 'row', style: { marginTop: '6px' } }, act('Offer white peace', () => IM.Diplo.offerPeace(g, c, w, 'white')), act('Demand concessions', () => IM.Diplo.offerPeace(g, c, w, 'concession'))));
       })));
     }
@@ -533,9 +533,9 @@ window.IM = window.IM || {};
     const actor = IM.Game.byTag(g, ev.actor);
     const art = h('div', { class: 'event-art' }, h('div', null, h('div', { class: 'ea-date' }, IM.Game.fmtDate(g).toUpperCase()), h('div', { class: 'ea-title' }, ev.title)));
     if (pe.actor) {
-      UI.modal(ev.title, h('div', null, ev.text), ev.options.map((o, i) => ({ label: o.label, primary: i === 0, fn: () => { IM.Events.resolve(g, ev.id, i); R.dirty = true; P.refresh(true); } })), art);
+      UI.modal(ev.title, h('div', null, h('div', { class: 'row muted small', style: { marginBottom: '8px' } }, UI.flag(actor, 'sm'), actor.name), ev.text), ev.options.map((o, i) => ({ label: o.label, primary: i === 0, fn: () => { IM.Events.resolve(g, ev.id, i); R.dirty = true; P.refresh(true); } })), art);
     } else {
-      UI.modal(ev.title, h('div', null, h('div', { class: 'muted small', style: { marginBottom: '6px' } }, `News from ${actor ? actor.name : 'abroad'}`), ev.text, h('div', { style: { marginTop: '8px' } }, h('b', null, `${actor ? actor.name : ''} chose: ${ev.options[0].label}`))), [{ label: 'Noted', primary: true }], art);
+      UI.modal(ev.title, h('div', null, h('div', { class: 'row muted small', style: { marginBottom: '8px' } }, actor ? UI.flag(actor, 'sm') : null, `News from ${actor ? actor.name : 'abroad'}`), ev.text, h('div', { style: { marginTop: '8px' } }, h('b', null, `${actor ? actor.name : ''} chose: ${ev.options[0].label}`))), [{ label: 'Noted', primary: true }], art);
     }
   };
 

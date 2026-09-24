@@ -84,3 +84,15 @@ IM.IDEOLOGIES = {
   fascist: { name: 'Fascist', modernName: 'Nationalist', color: '#7a5a3a' },
   authoritarian: { name: 'Non-Aligned', modernName: 'Authoritarian', color: '#8a8a5a' },
 };
+
+// Short display names for cards and tight spaces.
+IM.SHORT_NAMES = { SOV: 'Soviet Union', CHN: 'China', USA: 'United States', GBR: 'Britain', DEU: 'Germany', RAJ: 'British Raj', RSI: 'Salò Republic', CZS: 'Czechoslovakia', ICH: 'Ichkeria', DPR: 'Donetsk PR', LPR: 'Luhansk PR', COD: 'DR Congo', CAF: 'C. African Rep.', ARE: 'UAE' };
+IM.shortName = function (c, max) {
+  max = max || 16;
+  if (c.name.length <= max) return c.name;
+  if (IM.SHORT_NAMES[c.tag]) return IM.SHORT_NAMES[c.tag];
+  const stripped = c.name.replace(/^(The )?(Second |Independent State of |Islamic Republic of |Islamic Emirate of |Republic of |Kingdom of |Empire of |Tsardom of |Union of |Provisional Government of |Democratic Federal |Federal Republic of |Czech and Slovak Federative |People's Republic of )/i, '').replace(/ (Republic|Federation)$/, '');
+  if (stripped.length <= max) return stripped === 'Polish' ? 'Poland' : stripped === 'Russian' ? 'Russia' : stripped;
+  const base = IM.COUNTRY_NAMES[c.tag];
+  return base && base.length <= max ? base : c.tag;
+};

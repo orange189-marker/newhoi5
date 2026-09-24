@@ -223,6 +223,13 @@ window.IM = window.IM || {};
       ctx.restore();
       ctx.setTransform(cam.z * dpr, 0, 0, cam.z * dpr, (-x0) * cam.z * dpr, -y0 * cam.z * dpr);
     }
+    // nation-selection highlight: dim everyone else
+    const F = R.focusOwner ?? -1;
+    if (F >= 0) {
+      const dim = new Path2D();
+      for (const i of vis) if (W.region[i] && G.owner[W.stateOf[i]] !== F) hexPath(dim, R.cx[i], R.cy[i], S * 1.04);
+      ctx.fillStyle = 'rgba(8,12,16,0.58)'; ctx.fill(dim);
+    }
     // forts (when zoomed in)
     if (hexPx > 14) {
       ctx.fillStyle = 'rgba(40,30,20,0.55)';
@@ -232,14 +239,18 @@ window.IM = window.IM || {};
       }
     }
     // --- borders: state (thin), country (thick), front lines
-    const stateB = new Path2D(), countryB = new Path2D(), front = new Path2D(), coast = new Path2D();
+    const stateB = new Path2D(), countryB = new Path2D(), front = new Path2D(), coast = new Path2D(), focusB = new Path2D();
     for (const i of vis) {
       if (!W.region[i]) continue;
       const si = W.stateOf[i], oi = G.owner[si], ci = G.ctrl[i];
       for (let k = 0; k < 6; k++) {
         const j = W.nb[i * 6 + k];
         if (j < 0) continue;
-        if (!W.region[j]) { if (hexPx > 5) { const e = edgeCoords(i, k, 0); coast.moveTo(e[0], e[1]); coast.lineTo(e[2], e[3]); } continue; }
+        if (!W.region[j]) {
+          if (hexPx > 5 || (F >= 0 && oi === F)) { const e = edgeCoords(i, k, 0); (F >= 0 && oi === F ? focusB : coast).moveTo(e[0], e[1]); (F >= 0 && oi === F ? focusB : coast).lineTo(e[2], e[3]); }
+          continue;
+        }
+        if (F >= 0 && (oi === F) !== (G.owner[W.stateOf[j]] === F)) { const e = edgeCoords(i, k, 0); if (Math.abs(e[0] - e[2]) < HW * 2) { focusB.moveTo(e[0], e[1]); focusB.lineTo(e[2], e[3]); } }
         if (j < i && vis.length > 0 && Math.abs(R.cx[j] - R.cx[i]) < HW * 2) continue; // draw each shared edge once
         const sj = W.stateOf[j];
         if (sj === si && G.ctrl[j] === ci) continue;
@@ -255,6 +266,7 @@ window.IM = window.IM || {};
     if (hexPx > 5) { ctx.strokeStyle = 'rgba(200,225,240,0.35)'; ctx.lineWidth = 1 / px; ctx.stroke(coast); }
     if (hexPx > 6) { ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 0.8 / px; ctx.stroke(stateB); }
     ctx.strokeStyle = 'rgba(10,10,10,0.85)'; ctx.lineWidth = Math.max(1.3 / px, HW * 0.08); ctx.stroke(countryB);
+    if (F >= 0) { ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = Math.max(4 / px, HW * 0.2); ctx.stroke(focusB); ctx.strokeStyle = '#f2d27d'; ctx.lineWidth = Math.max(2 / px, HW * 0.09); ctx.stroke(focusB); }
     ctx.strokeStyle = '#ff5a3c'; ctx.lineWidth = Math.max(2.2 / px, HW * 0.14); ctx.stroke(front);
     ctx.strokeStyle = 'rgba(40,0,0,0.9)'; ctx.lineWidth = Math.max(0.8 / px, HW * 0.04); ctx.stroke(front);
     // selected state highlight
@@ -382,21 +394,23 @@ window.IM = window.IM || {};
           ctx.strokeStyle = '#000'; ctx.lineWidth = 0.6 / px; ctx.strokeRect(x - r, y - r, r * 2, r * 2);
           continue;
         }
-        const w = Math.min(HW * 1.25, 34 / px), h = w * 0.52;
+        const w = Math.min(HW * 1.4, 40 / px), h = w * 0.46;
         const bx = x - w / 2, by = y - h / 2;
         ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(bx + 0.8 / px, by + 0.8 / px, w, h);
-        ctx.fillStyle = c.color; ctx.fillRect(bx, by, w, h);
-        ctx.fillStyle = 'rgba(20,20,20,0.82)'; ctx.fillRect(bx + w * 0.34, by, w * 0.66, h);
+        ctx.fillStyle = 'rgba(20,20,20,0.88)'; ctx.fillRect(bx, by, w, h);
+        const fimg = IM.flagImage(c);
+        if (fimg.complete && fimg.naturalWidth) ctx.drawImage(fimg, bx, by, w * 0.34, h);
+        else { ctx.fillStyle = c.color; ctx.fillRect(bx, by, w * 0.34, h); }
         ctx.lineWidth = (anySel ? 1.8 : 0.8) / px;
         ctx.strokeStyle = anySel ? '#ffe070' : (o === me ? '#d9f0ff' : '#000');
         ctx.strokeRect(bx, by, w, h);
         // icon: NATO-style box for main type
         const main = arr.reduce((m, d) => (d.tpl === 'arm' ? 'arm' : m === 'arm' ? m : d.tpl === 'mec' ? 'mec' : m), arr[0].tpl);
-        drawNato(bx + w * 0.04, by + h * 0.18, w * 0.27, h * 0.64, main, px);
-        const fs = h * 0.7;
+        drawNato(bx + w * 0.39, by + h * 0.22, w * 0.24, h * 0.56, main, px);
+        const fs = h * 0.66;
         ctx.font = `700 ${fs}px system-ui, sans-serif`;
         ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(String(arr.length), bx + w * 0.67, by + h * 0.47);
+        ctx.fillText(String(arr.length), bx + w * 0.81, by + h * 0.5);
         // org / strength bars
         const org = arr.reduce((a, d) => a + d.org / IM.War.stats(G, d).org, 0) / arr.length;
         const str = arr.reduce((a, d) => a + d.str, 0) / arr.length;

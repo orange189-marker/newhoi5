@@ -72,6 +72,8 @@ Each era has its own borders, colonial empires, factions (Allies, Axis, Cominter
 - **Emergency militia** — threatened cities raise territorial-defense units at short notice.
 - **AI generals** — delegate any group of divisions (or the whole army) to the AI.
 - **Attack-odds preview** — hover an enemy stack with divisions selected.
+- Real flags for every nation, with period-correct flags for historical states (Soviet Union, Manchukuo, Vichy France, Free France, the British Raj, pre-1965 Canada, Ichkeria and more).
+- A nation-selection screen with briefings, difficulty ratings and strength comparisons for each era's powers.
 - Saving and loading (stored in your browser).
 
 ## Project layout
@@ -83,6 +85,7 @@ js/data/              map data (generated), cities/states, countries, eras, rule
 js/engine/            world model & pathfinding, economy, war, diplomacy, events, AI, save/load
 js/ui/                canvas renderer, screens & input, management panels
 tools/build-map.js    regenerates js/data/mapdata.js from Natural Earth data
+tools/build-flags.js  regenerates js/data/flags.js (flag-icons + hand-drawn period flags)
 tools/sim-test.js     headless simulation of every era (smoke/balance test)
 ```
 
@@ -92,6 +95,7 @@ tools/sim-test.js     headless simulation of every era (smoke/balance test)
 npm install        # only needed for the tools
 npm test           # simulate every era for 90 days headlessly: node tools/sim-test.js [days] [era]
 npm run build-map  # rebuild the hex map from Natural Earth (world-atlas)
+npm run build-flags # rebuild the flag images (needs Playwright's Chromium)
 ```
 
-Map geometry comes from [Natural Earth](https://www.naturalearthdata.com/) via the `world-atlas` package. Iron Meridian is an independent, fan-made game inspired by the grand strategy genre; it is not affiliated with Paradox Interactive.
+Map geometry comes from [Natural Earth](https://www.naturalearthdata.com/) via the `world-atlas` package. Modern flags come from [flag-icons](https://github.com/lipis/flag-icons) (MIT). Iron Meridian is an independent, fan-made game inspired by the grand strategy genre; it is not affiliated with Paradox Interactive.

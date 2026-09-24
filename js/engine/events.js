@@ -161,8 +161,8 @@ window.IM = window.IM || {};
       text: 'Ljubljana and Zagreb have declared independence. The Yugoslav People\'s Army is mobilising.',
       cond: G => exists(G, 'YUG'),
       options: [
-        { label: 'Let them go, but fight for Croatia', fx: G => { IM.Diplo.release(G, 'YUG', ['SVN', 'HRV', 'MKD'], { HRV: { ideo: 'democratic', leader: 'Franjo Tuđman' }, SVN: { ideo: 'democratic', leader: 'Milan Kučan' }, MKD: { ideo: 'democratic', leader: 'Kiro Gligorov' } }); setGov(G, 'YUG', { name: 'FR Yugoslavia', ideo: 'authoritarian', leader: 'Slobodan Milošević' }); E.limitedWar(G, 'Croatian War of Independence', ['YUG'], ['HRV']); } },
-        { label: 'Accept a peaceful dissolution', fx: G => { IM.Diplo.release(G, 'YUG', ['SVN', 'HRV', 'MKD', 'BIH'], {}); setGov(G, 'YUG', { name: 'FR Yugoslavia', ideo: 'authoritarian' }); } },
+        { label: 'Let them go, but fight for Croatia', fx: G => { IM.Diplo.release(G, 'YUG', ['SVN', 'HRV', 'MKD'], { HRV: { ideo: 'democratic', leader: 'Franjo Tuđman' }, SVN: { ideo: 'democratic', leader: 'Milan Kučan' }, MKD: { ideo: 'democratic', leader: 'Kiro Gligorov' } }); setGov(G, 'YUG', { name: 'FR Yugoslavia', ideo: 'authoritarian', leader: 'Slobodan Milošević', flag: 'FR_YUG' }); E.limitedWar(G, 'Croatian War of Independence', ['YUG'], ['HRV']); } },
+        { label: 'Accept a peaceful dissolution', fx: G => { IM.Diplo.release(G, 'YUG', ['SVN', 'HRV', 'MKD', 'BIH'], {}); setGov(G, 'YUG', { name: 'FR Yugoslavia', ideo: 'authoritarian', flag: 'FR_YUG' }); } },
       ],
     },
     {
@@ -182,7 +182,7 @@ window.IM = window.IM || {};
               UKR: { ideo: 'democratic', leader: 'Leonid Kravchuk' }, BLR: { leader: 'Stanislav Shushkevich' }, KAZ: { leader: 'Nursultan Nazarbayev' },
               EST: { ideo: 'democratic' }, LVA: { ideo: 'democratic' }, LTU: { ideo: 'democratic' }, GEO: { leader: 'Zviad Gamsakhurdia' },
             });
-            setGov(G, 'SOV', { name: 'Russian Federation', ideo: 'democratic', leader: 'Boris Yeltsin', color: IM.COUNTRY_COLORS.RUS });
+            setGov(G, 'SOV', { name: 'Russian Federation', ideo: 'democratic', leader: 'Boris Yeltsin', color: IM.COUNTRY_COLORS.RUS, flag: 'RUS' });
           },
         },
         {
@@ -222,7 +222,7 @@ window.IM = window.IM || {};
       id: 'montenegro', eras: ['2000'], date: [2006, 6, 3], actor: 'SRB', title: 'Montenegrin Independence',
       text: 'Montenegro has voted narrowly for independence.',
       cond: G => exists(G, 'SRB'),
-      options: [{ label: 'Accept the result', fx: G => { IM.Diplo.release(G, 'SRB', ['MNE'], { MNE: { ideo: 'democratic' } }); setGov(G, 'SRB', { name: 'Serbia' }); } }],
+      options: [{ label: 'Accept the result', fx: G => { IM.Diplo.release(G, 'SRB', ['MNE'], { MNE: { ideo: 'democratic' } }); setGov(G, 'SRB', { name: 'Serbia', flag: 'SRB' }); } }],
     },
     {
       id: 'georgia2008', eras: ['2000'], date: [2008, 8, 8], actor: 'RUS', title: 'The Five-Day War',
@@ -266,7 +266,7 @@ window.IM = window.IM || {};
       id: 'taliban', eras: ['2021'], date: [2021, 8, 15], actor: 'AFG', title: 'The Fall of Kabul',
       text: 'The last Western troops are leaving. Provincial capitals have fallen one after another, and the Taliban are at the gates of Kabul.',
       cond: G => exists(G, 'AFG'),
-      options: [{ label: 'The Islamic Emirate returns', fx: G => setGov(G, 'AFG', { name: 'Islamic Emirate of Afghanistan', ideo: 'authoritarian', leader: 'Hibatullah Akhundzada', stab: 0.5 }) }],
+      options: [{ label: 'The Islamic Emirate returns', fx: G => setGov(G, 'AFG', { name: 'Islamic Emirate of Afghanistan', ideo: 'authoritarian', leader: 'Hibatullah Akhundzada', stab: 0.5, flag: 'AFG_IE' }) }],
     },
     {
       id: 'invasion2022', eras: ['2021'], date: [2022, 2, 24], actor: 'RUS', title: 'Special Military Operation',

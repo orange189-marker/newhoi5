@@ -38,7 +38,8 @@ window.IM = window.IM || {};
     return String(Math.round(n));
   };
   UI.pct = v => Math.round(v * 100) + '%';
-  UI.flag = (c, big) => h('div', { class: 'flag', 'data-tag': c.tag.slice(0, 3), style: { background: c.color, width: big ? '64px' : null, height: big ? '42px' : null } });
+  // size: 'xs' | 'sm' (default) | 'md' | 'lg' | 'xl'
+  UI.flag = (c, size) => h('div', { class: 'flag ' + (size === true ? 'md' : size || 'sm'), title: c.name, style: { backgroundImage: `url("${IM.flagURL(c)}")` } });
 
   // tooltips
   let tipEl = null;
@@ -62,7 +63,7 @@ window.IM = window.IM || {};
     requestAnimationFrame(loop);
   };
 
-  function clear() { UI.clearTip(); root.innerHTML = ''; R.showUnits = false; R.dirty = true; }
+  function clear() { UI.clearTip(); root.innerHTML = ''; R.showUnits = false; if (UI.screen !== 'pick') R.focusOwner = -1; R.dirty = true; }
 
   // A backdrop game (no player) so the menu has a live world map behind it.
   function backdrop(eraId) {
@@ -104,48 +105,123 @@ window.IM = window.IM || {};
     ));
   };
 
+  // ------------------------------------------------------------------ nation selection
   UI.pickTag = null;
+  const DIFF_ORDER = ['Easy', 'Normal', 'Hard', 'Very Hard'];
+  function strength(G, c, st) {
+    const divs = G.divisions.filter(d => d.owner === c.id).length;
+    return st.civ + st.mil * 1.6 + divs * 0.8 + c.stock.air / 400 + c.stock.nav / 20;
+  }
+  function assess(G, c) {
+    const st = IM.Game.countryStats(G, c);
+    const brief = ((IM.BRIEFINGS || {})[G.eraId] || {})[c.tag];
+    if (brief) return { diff: brief[0], text: brief[1], st };
+    const own = strength(G, c, st);
+    const foes = IM.War.enemiesOf(G, c.id);
+    const foe = foes.reduce((a, e) => a + strength(G, G.countries[e], IM.Game.countryStats(G, G.countries[e])), 0);
+    let diff = own > 60 ? 'Easy' : own > 15 ? 'Normal' : own > 5 ? 'Hard' : 'Very Hard';
+    if (foes.length) diff = foe > own * 2 ? 'Very Hard' : foe > own ? 'Hard' : diff;
+    const neigh = new Map();
+    for (const s of G.W.states) if (G.owner[s.id] === c.id) for (const n of s.neighbors) { const o = G.owner[n]; if (o !== c.id) neigh.set(o, (neigh.get(o) || 0) + 1); }
+    const names = [...neigh].filter(([i]) => G.countries[i].alive).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([i]) => G.countries[i].name);
+    const parts = [];
+    parts.push(`${c.name} is home to about ${UI.fmt(st.pop * 1e6)} people${c.overlord !== null && c.overlord !== undefined ? `, a subject of ${G.countries[c.overlord].name}` : ''}.`);
+    if (foes.length) parts.push(`It is at war with ${foes.slice(0, 3).map(e => G.countries[e].name).join(', ')}.`);
+    else if (names.length) parts.push(`Its neighbours include ${names.join(', ')}.`);
+    if (c.faction >= 0) { const f = G.factions[c.faction].name; parts.push(`It is a member of ${/^[A-Z]{3,}$/.test(f) ? f : 'the ' + f}.`); }
+    return { diff, text: parts.join(' '), st };
+  }
+  const diffChip = d => h('span', { class: 'diff d' + DIFF_ORDER.indexOf(d) }, h('i'), h('i'), h('i'), h('i'), d);
+  const monogram = name => (name || '?').replace(/^(Government of|King|Prince|Marshal|Lord)\s+/i, '').split(/\s+/).filter(w => /^[A-ZÀ-Ž]/.test(w)).slice(0, 2).map(w => w[0]).join('') || '?';
+
   UI.showPick = function (eraId) {
     UI.screen = 'pick';
     backdrop(eraId);
-    const G = UI.G;
-    const era = G.era;
-    const majors = G.countries.filter(c => c.alive && (era.countries[c.tag] && (era.countries[c.tag].div || 0) >= 8)).sort((a, b) => (b.divTarget || 0) - (a.divTarget || 0));
+    const G = UI.G, era = G.era;
+    const alive = G.countries.filter(c => c.alive);
+    const briefed = (IM.BRIEFINGS || {})[eraId] || {};
+    const scored = alive.map(c => ({ c, s: strength(G, c, IM.Game.countryStats(G, c)) }));
+    const majors = scored.filter(x => briefed[x.c.tag] || (era.countries[x.c.tag] && (era.countries[x.c.tag].div || 0) >= 20))
+      .sort((a, b) => b.s - a.s).map(x => x.c);
+    const max = { ind: 1, army: 1, mp: 1, air: 1, nav: 1 };
+    const statOf = new Map();
+    for (const c of alive) {
+      const st = IM.Game.countryStats(G, c);
+      const v = { ind: st.civ + st.mil, army: G.divisions.filter(d => d.owner === c.id).length, mp: st.mpTotal, air: c.stock.air * (1 + c.mods.air), nav: c.stock.nav * (1 + c.mods.nav) };
+      statOf.set(c.id, v);
+      for (const k in max) max[k] = Math.max(max[k], v[k]);
+    }
     if (!UI.pickTag || !IM.Game.byTag(G, UI.pickTag) || !IM.Game.byTag(G, UI.pickTag).alive) UI.pickTag = majors[0].tag;
-    R.centerOn(G.W.states[IM.Game.byTag(G, UI.pickTag).capital].cityHex, Math.max(1.4, canvas.clientHeight / R.worldH * 3));
-    let aiMode = 'historical';
+    let aiMode = 'historical', query = '';
+    const focusOn = c => { R.focusOwner = c.id; R.centerOn(G.W.states[c.capital].cityHex, Math.max(1.6, canvas.clientHeight / R.worldH * 3.2)); };
+    focusOn(IM.Game.byTag(G, UI.pickTag));
+
+    const choose = tag => { UI.pickTag = tag; focusOn(IM.Game.byTag(G, tag)); render(); };
     const render = () => {
       clear();
+      R.focusOwner = IM.Game.byTag(G, UI.pickTag).id;
       const c = IM.Game.byTag(G, UI.pickTag);
-      R.selectedState = -1;
-      const st = IM.Game.countryStats(G, c);
-      const divs = G.divisions.filter(d => d.owner === c.id).length;
+      const a = assess(G, c), st = a.st, v = statOf.get(c.id);
       const wars = G.wars.filter(w => w.att.includes(c.id) || w.def.includes(c.id));
-      root.appendChild(h('div', { class: 'pick-hint' }, `${era.id} · ${era.title} — click any nation on the map, or pick a major power`));
-      root.appendChild(h('div', { class: 'pick-panel' },
-        h('div', { class: 'ph' },
-          h('div', { class: 'row' }, UI.flag(c, true), h('div', null, h('h2', { style: { fontSize: '19px' } }, c.name), h('div', { class: 'muted small' }, IM.Game.ideoName(G, c.ideo), ' · ', c.leader)))),
-        h('div', { class: 'pb' },
-          h('div', { class: 'muted small' }, 'MAJOR POWERS'),
-          h('div', { class: 'majors' }, majors.slice(0, 16).map(m => h('span', { class: 'chip' + (m.tag === c.tag ? ' on' : ''), onclick: () => { UI.pickTag = m.tag; R.centerOn(G.W.states[m.capital].cityHex); render(); } }, h('i', { class: 'swatch', style: { background: m.color } }), m.name.length > 18 ? m.tag : m.name))),
-          h('div', { class: 'kv' },
-            h('span', null, 'Faction'), h('span', null, c.faction >= 0 ? G.factions[c.faction].name : '—'),
-            h('span', null, 'Factories'), h('span', null, `${st.civ} civilian · ${st.mil} military`),
-            h('span', null, 'Divisions'), h('span', null, String(divs)),
-            h('span', null, 'Manpower'), h('span', null, UI.fmt(st.mp)),
-            h('span', null, 'Aircraft / Navy'), h('span', null, `${UI.fmt(c.stock.air)} / ${UI.fmt(c.stock.nav)}`),
-            c.stock.nuk ? h('span', null, 'Nuclear warheads') : null, c.stock.nuk ? h('span', { class: 'warn' }, String(c.stock.nuk)) : null,
-            h('span', null, 'Tech level'), h('span', null, String(c.techYear)),
-            h('span', null, 'At war'), h('span', { class: wars.length ? 'bad' : '' }, wars.length ? wars.map(w => w.name).join(', ') : 'No'),
-          ),
-          h('div', { class: 'sec', style: { marginTop: '14px' } }, h('div', { class: 'muted small' }, era.blurb)),
-          h('div', { class: 'row small', style: { marginTop: '6px' } }, h('span', { class: 'muted' }, 'AI behaviour'),
-            h('select', { onchange: e => { aiMode = e.target.value; } }, h('option', { value: 'historical' }, 'Historical'), h('option', { value: 'unpredictable' }, 'Unpredictable (AI starts wars)'))),
+      const bar = (label, val, frac, txt) => h('div', { class: 'sbar' }, h('span', { class: 'sl' }, label), h('div', { class: 'bar' }, h('i', { style: { width: Math.max(2, Math.min(100, Math.sqrt(frac) * 100)) + '%' } })), h('span', { class: 'sv num' }, txt));
+      const ideo = IM.IDEOLOGIES[c.ideo];
+
+      // era card
+      root.appendChild(h('div', { class: 'bm-era' },
+        h('div', { class: 'bm-year' }, era.id), h('div', { class: 'bm-title' }, era.title),
+        h('div', { class: 'bm-date' }, IM.Game.fmtDate(G)), h('p', null, era.blurb),
+        h('button', { class: 'btn small', onclick: UI.showEras }, '‹ Choose another era')));
+
+      // detail panel
+      const search = h('input', { type: 'text', id: 'nation-search', placeholder: 'Find any nation…', value: query, autocomplete: 'off' });
+      const results = h('div', { class: 'bm-results' });
+      const showResults = () => {
+        results.innerHTML = '';
+        if (!query) return;
+        const q = query.toLowerCase();
+        const hits = alive.filter(x => x.name.toLowerCase().includes(q) || x.tag.toLowerCase() === q).slice(0, 8);
+        if (!hits.length) results.appendChild(h('div', { class: 'muted small', style: { padding: '6px 8px' } }, 'No nation by that name in this era.'));
+        for (const x of hits) results.appendChild(h('div', { class: 'bm-hit', onclick: () => { query = ''; choose(x.tag); } }, UI.flag(x, 'xs'), h('span', null, x.name)));
+      };
+      search.addEventListener('input', e => { query = e.target.value; showResults(); });
+      showResults();
+
+      const faction = c.faction >= 0 ? G.factions[c.faction] : null;
+      root.appendChild(h('div', { class: 'bm-panel' },
+        h('div', { class: 'bm-search' }, search, results),
+        h('div', { class: 'bm-head' },
+          UI.flag(c, 'xl'),
+          h('div', { class: 'bm-name' }, h('h2', null, c.name),
+            h('div', { class: 'row', style: { flexWrap: 'wrap', gap: '6px' } }, h('span', { class: 'ideo', style: { '--ic': ideo.color } }, IM.Game.ideoName(G, c.ideo)), diffChip(a.diff)))),
+        h('div', { class: 'bm-body' },
+          h('div', { class: 'leader' }, h('div', { class: 'mono', style: { background: `linear-gradient(135deg, ${ideo.color}, #1a2126)` } }, monogram(c.leader)),
+            h('div', null, h('div', { class: 'muted small' }, 'Head of government'), h('b', null, c.leader))),
+          h('p', { class: 'brief' }, a.text),
+          h('div', { class: 'bm-stats' },
+            bar('Industry', v.ind, v.ind / max.ind, `${st.civ} civ · ${st.mil} mil`),
+            bar('Army', v.army, v.army / max.army, `${v.army} divisions`),
+            bar('Manpower', v.mp, v.mp / max.mp, UI.fmt(st.mp)),
+            bar('Air power', v.air, v.air / max.air, UI.fmt(c.stock.air)),
+            bar('Navy', v.nav, v.nav / max.nav, UI.fmt(c.stock.nav)),
+            h('div', { class: 'sbar' }, h('span', { class: 'sl' }, 'Technology'), h('span', { class: 'sv', style: { gridColumn: 'span 2', textAlign: 'left' } }, `${c.techYear} level${c.stock.nuk ? ` · ☢ ${c.stock.nuk} warheads` : ''}`))),
+          faction ? h('div', { class: 'bm-sec' }, h('div', { class: 'bm-label' }, faction.name, h('span', { class: 'muted' }, faction.leader === c.id ? ' · leader' : '')),
+            h('div', { class: 'flagrow' }, faction.members.map(m => G.countries[m]).filter(x => x.alive).map(x => { const f = UI.flag(x, 'xs'); f.onclick = () => choose(x.tag); return f; }))) : null,
+          wars.length ? h('div', { class: 'bm-sec' }, h('div', { class: 'bm-label bad' }, 'At war'),
+            wars.map(w => { const foe = (w.att.includes(c.id) ? w.def : w.att).map(i => G.countries[i]).filter(x => x.alive); return h('div', { class: 'warrow' }, h('span', null, w.name), h('div', { class: 'flagrow' }, foe.slice(0, 9).map(x => { const f = UI.flag(x, 'xs'); f.onclick = () => choose(x.tag); return f; }))); })) : null,
         ),
-        h('div', { class: 'pf' },
-          h('button', { class: 'btn', onclick: UI.showEras }, '‹ Eras'),
-          h('button', { class: 'btn primary grow', onclick: () => UI.startGame(eraId, UI.pickTag, aiMode) }, `Play as ${c.tag}`)),
+        h('div', { class: 'bm-foot' },
+          h('label', { class: 'small muted', for: 'ai-mode' }, 'AI'),
+          h('select', { id: 'ai-mode', onchange: e => { aiMode = e.target.value; } }, h('option', { value: 'historical' }, 'Historical'), h('option', { value: 'unpredictable' }, 'Unpredictable')),
+          h('button', { class: 'btn primary grow', onclick: () => { R.focusOwner = -1; UI.startGame(eraId, UI.pickTag, aiMode); } }, `Play as ${c.name.length > 22 ? IM.shortName(c) : c.name}`)),
       ));
+
+      // majors strip
+      root.appendChild(h('div', { class: 'bm-strip' }, majors.map(m => {
+        const d = assess(G, m).diff;
+        return h('button', { class: 'bm-card' + (m.tag === c.tag ? ' on' : ''), onclick: () => choose(m.tag), style: { '--ic': IM.IDEOLOGIES[m.ideo].color } },
+          UI.flag(m, 'md'), h('span', { class: 'bm-cn' }, IM.shortName(m, 13)), h('span', { class: 'dots d' + DIFF_ORDER.indexOf(d), title: d }, h('i'), h('i'), h('i'), h('i')));
+      })));
+      R.dirty = true;
     };
     UI._pickRender = render;
     render();

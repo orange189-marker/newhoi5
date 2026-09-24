@@ -49,6 +49,7 @@ window.IM = window.IM || {};
     const c = {
       id, tag, name: spec.name || IM.COUNTRY_NAMES[tag] || tag,
       color: spec.color || IM.COUNTRY_COLORS[tag] || IM.hashColor(tag),
+      flag: spec.flag || ((IM.ERA_FLAGS || {})[G.eraId] || {})[tag] || tag,
       ideo: spec.ideo || 'authoritarian', leader: spec.leader || null,
       alive: true, capitulated: false, capital: -1,
       pp: 50, stab: spec.stab ?? 0.6, ws: spec.ws ?? 0.3, mpUsed: 0,
