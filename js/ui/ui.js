@@ -75,6 +75,7 @@ window.IM = window.IM || {};
 
   UI.showMenu = function () {
     UI.screen = 'menu'; UI.paused = true;
+    if (IM.News) IM.News.reset();
     backdrop('1939');
     R.centerOn(R.hexAtIndex ? 0 : IM.world.hexAt(20, 45), canvas.clientHeight / R.worldH * 2.2);
     clear();
@@ -230,10 +231,11 @@ window.IM = window.IM || {};
   UI.startGame = function (eraId, tag, aiMode) {
     UI.G = IM.Game.create(eraId, tag);
     UI.G.aiMode = aiMode || 'historical';
-    enterGame();
+    enterGame(true);
   };
-  function enterGame() {
+  function enterGame(isNew) {
     const G = UI.G;
+    IM.News.reset();
     UI.screen = 'game'; UI.paused = true; UI.panel = null;
     R.selected.clear(); R.selectedState = -1;
     const c = G.countries[G.player];
@@ -242,6 +244,7 @@ window.IM = window.IM || {};
     R.showUnits = true;
     IM.Game.news(G, `You lead ${c.name}. The game is paused — press Space to begin.`, 'major');
     setTimeout(() => IM.Panels.toast({ text: 'Tip: select divisions and right-click to move. Army → "Delegate all" hands your fronts to an AI general.', kind: 'info' }), 400);
+    if (isNew && G.era.intro) IM.Game.headline(G, { type: 'super', key: G.era.intro });
   }
 
   UI.showLoad = function () {
@@ -336,14 +339,19 @@ window.IM = window.IM || {};
       let n = Math.min(Math.floor(carry), 96);
       carry -= Math.floor(carry);
       const t0 = performance.now();
-      while (n-- > 0) {
+      while (n-- > 0 && !IM.News.busy()) {
         IM.Game.tick(G);
         ticked = true;
-        if (G.pendingEvents.length) { UI.paused = true; IM.Panels.showEvent(G.pendingEvents.shift()); break; }
+        if (G.headlines && G.headlines.some(x => x.type === 'super')) break;
+        if (G.pendingEvents.length) break;
         if (performance.now() - t0 > 40) { carry = 0; break; }
       }
     }
     if (ticked) R.dirty = true;
+    if (G && UI.screen === 'game') {
+      IM.News.pump(G);
+      if (!IM.News.busy() && G.pendingEvents.length) { UI.paused = true; IM.Panels.showEvent(G.pendingEvents.shift()); }
+    }
     if (R.dirty && now - lastDraw > 30) { R.draw(G); R.dirty = false; lastDraw = now; }
     if (UI.screen === 'game' && now - lastUI > 250) { IM.Panels.refresh(); lastUI = now; }
     requestAnimationFrame(loop);

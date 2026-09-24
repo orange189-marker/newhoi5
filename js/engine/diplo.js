@@ -67,6 +67,7 @@ window.IM = window.IM || {};
     }
     G.relDirty = true;
     Game().news(G, `${c.name} has joined the ${f.name}.`, 'major');
+    if (Game().notable(G, c.id) && !c.isPlayer) Game().headline(G, { type: 'news', tags: [c.tag], title: `${c.name.toUpperCase()} JOINS THE ${f.name.toUpperCase()}`, text: `${c.name} has formally joined the ${f.name} led by ${G.countries[f.leader].name}, pledging to stand with its members in war.`, art: { kind: 'flags', flags: [c.tag, G.countries[f.leader].tag] } });
     return null;
   };
   D.leaveFaction = function (G, c) {
@@ -190,6 +191,14 @@ window.IM = window.IM || {};
     for (const o of G.countries) if (o.alive && o.id !== c.id && o.ideo === 'democratic' && !War().isFriend(G, o.id, c.id)) o.sanctionedBy && c.sanctionedBy.add(o.id);
     G.nukeFlashes.push({ hex, t: G.hour, r: radius });
     Game().news(G, `☢ ${c.name} has detonated a nuclear weapon over ${st.name}! ${killed} divisions annihilated.`, 'nuke');
+    Game().headline(G, {
+      type: 'super', tags: [c.tag, victim.tag],
+      title: `Nuclear Fire over ${st.name}`,
+      quote: 'I know not with what weapons World War III will be fought, but World War IV will be fought with sticks and stones.',
+      quoteBy: 'Albert Einstein (attributed)',
+      text: `A nuclear warhead launched by ${c.name} has detonated over ${st.name}. A fireball hotter than the surface of the sun has levelled the city centre; ${killed ? `${killed} division${killed > 1 ? 's were' : ' was'} annihilated outright and ` : ''}hundreds of thousands are dead or dying. Around the world, markets crash, governments convene in emergency session, and every nuclear power raises its alert level. The taboo that held since 1945 has been broken.`,
+      art: { kind: 'nuke' },
+    });
     // deterrence: retaliation by nuclear-armed enemies
     for (const e of War().enemiesOf(G, c.id)) {
       const E = G.countries[e];

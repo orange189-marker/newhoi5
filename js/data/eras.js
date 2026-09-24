@@ -42,7 +42,7 @@ window.IM = window.IM || {};
   IM.ERAS = [
     // ================================================================ 1939
     {
-      id: '1939', title: 'The Gathering Storm', start: [1939, 9, 1], techYear: 1939, tension: 70,
+      id: '1939', intro: 'poland1939', title: 'The Gathering Storm', start: [1939, 9, 1], techYear: 1939, tension: 70,
       blurb: 'September 1939. German armies pour across the Polish frontier. Britain and France honour their guarantee. The world holds its breath.',
       owner: { ...WW2_COMMON, AUT: 'DEU', CZE: 'DEU', SVK: 'SVK' },
       states: {
@@ -93,7 +93,7 @@ window.IM = window.IM || {};
     },
     // ================================================================ 1941
     {
-      id: '1941', title: 'Operation Barbarossa', start: [1941, 6, 22], techYear: 1941, tension: 90,
+      id: '1941', intro: 'barbarossa', title: 'Operation Barbarossa', start: [1941, 6, 22], techYear: 1941, tension: 90,
       blurb: 'June 1941. Europe lies under the swastika. Three million Axis soldiers cross into the Soviet Union along a front from the Baltic to the Black Sea.',
       owner: {
         ...WW2_COMMON, AUT: 'DEU', CZE: 'DEU', SVK: 'SVK', POL: 'DEU', LUX: 'DEU', NLD: 'DEU', BEL: 'DEU', DNK: 'DEU',
@@ -203,7 +203,7 @@ window.IM = window.IM || {};
     },
     // ================================================================ 1991
     {
-      id: '1991', title: 'Desert Storm & the Fall of the Union', start: [1991, 1, 17], techYear: 1990, tension: 30, modern: true,
+      id: '1991', intro: 'desert_storm', title: 'Desert Storm & the Fall of the Union', start: [1991, 1, 17], techYear: 1990, tension: 30, modern: true,
       blurb: 'January 1991. A US-led coalition opens the air war against Iraq over Kuwait. In Moscow, the Soviet Union is coming apart at the seams. Yugoslavia teeters.',
       owner: {
         ...all('SOV', SOVIET_REGIONS), ...all('YUG', YUGO), ...all('CZS', ['CZE', 'SVK']), KWT: 'IRQ', ERI: 'ETH',
@@ -318,7 +318,7 @@ window.IM = window.IM || {};
     },
     // ================================================================ 2022
     {
-      id: '2022', title: 'The Invasion', start: [2022, 2, 24], techYear: 2022, tension: 60, modern: true,
+      id: '2022', intro: 'invasion2022', title: 'The Invasion', start: [2022, 2, 24], techYear: 2022, tension: 60, modern: true,
       blurb: '24 February 2022. Before dawn, Russian columns roll into Ukraine from the north, east and south. Kyiv is the target. The world watches to see if it will fall.',
       owner: {},
       states: { ...cities('RUS', ['Simferopol']), ...cities('DPR', ['Donetsk']), ...cities('LPR', ['Luhansk']) },

@@ -54,7 +54,7 @@ window.IM = window.IM || {};
   const EV = [
     // ------------------------------------------------------------ WWII
     {
-      id: 'sov_poland', eras: ['1939'], date: [1939, 9, 17], actor: 'SOV', title: 'The Fourth Partition',
+      id: 'sov_poland', headline: 'RED ARMY CROSSES INTO POLAND', news: `Soviet troops have crossed Poland's eastern border, claiming to protect the Ukrainian and Belarusian population. With the Polish army already fighting for its life in the west, Poland has been stabbed in the back.`, eras: ['1939'], date: [1939, 9, 17], actor: 'SOV', title: 'The Fourth Partition',
       text: 'With the Polish army collapsing under the German onslaught, the secret protocol of the Molotov-Ribbentrop Pact gives us eastern Poland. Our troops stand ready on the border.',
       cond: G => exists(G, 'POL') && exists(G, 'SOV'),
       options: [
@@ -63,7 +63,7 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'winter_war', eras: ['1939'], date: [1939, 11, 30], actor: 'SOV', title: 'The Winter War',
+      id: 'winter_war', headline: 'SOVIETS ATTACK FINLAND', news: `After Helsinki rejected Moscow's territorial demands, Soviet bombers struck the Finnish capital and the Red Army crossed the border on the Karelian Isthmus. The Finns man the Mannerheim Line.`, eras: ['1939'], date: [1939, 11, 30], actor: 'SOV', title: 'The Winter War',
       text: 'Finland has refused our demands for territory on the Karelian Isthmus. Leningrad lies within artillery range of the border.',
       cond: G => alive(G, 'FIN') && alive(G, 'SOV'),
       options: [
@@ -72,7 +72,7 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'baltic', eras: ['1939'], date: [1940, 6, 15], actor: 'SOV', title: 'Ultimatum to the Baltic States',
+      id: 'baltic', headline: 'BALTIC STATES ABSORBED BY THE USSR', news: `Under Soviet ultimatums and occupying garrisons, Estonia, Latvia and Lithuania have been annexed into the Soviet Union. Romania has been forced to cede Bessarabia and northern Bukovina.`, eras: ['1939'], date: [1940, 6, 15], actor: 'SOV', title: 'Ultimatum to the Baltic States',
       text: 'Europe is distracted by the fall of France. The Baltic governments, and Romania over Bessarabia, will not dare refuse us now.',
       cond: G => alive(G, 'SOV') && (alive(G, 'EST') || alive(G, 'LVA') || alive(G, 'LTU')),
       options: [
@@ -81,7 +81,7 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'vichy', eras: ['1939'], date: [1940, 5, 1], actor: 'DEU', title: 'An Armistice at Compiègne',
+      id: 'vichy', headline: 'FRANCE SIGNS ARMISTICE', news: `In the same railway carriage at Compiègne where Germany surrendered in 1918, French delegates have signed an armistice. Marshal Pétain will govern the unoccupied south and the empire from the spa town of Vichy.`, eras: ['1939'], date: [1940, 5, 1], actor: 'DEU', title: 'An Armistice at Compiègne',
       text: 'France has fallen. A rump French state under Marshal Pétain offers to administer the south and the empire in exchange for peace.',
       wait: 1200, cond: G => { const f = byTag(G, 'FRA'); return f && f.capitulated && alive(G, 'DEU') && !byTag(G, 'VIC'); },
       options: [
@@ -100,7 +100,7 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'italy_joins', eras: ['1939'], date: [1940, 6, 10], actor: 'ITA', title: 'The Hand That Held the Dagger',
+      id: 'italy_joins', headline: 'ITALY DECLARES WAR ON BRITAIN AND FRANCE', news: `From the balcony of the Palazzo Venezia, Mussolini has announced Italy's entry into the war at Germany's side as French armies fall back on Paris.`, eras: ['1939'], date: [1940, 6, 10], actor: 'ITA', title: 'The Hand That Held the Dagger',
       text: 'The Wehrmacht is at the gates of Paris. Il Duce believes that a few thousand dead will buy Italy a seat at the peace conference.',
       cond: G => alive(G, 'ITA') && alive(G, 'DEU') && alive(G, 'GBR') && !IM.War.atWar(G, G.tagId.ITA),
       options: [
@@ -109,7 +109,7 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'barbarossa', eras: ['1939'], date: [1941, 6, 22], actor: 'DEU', title: 'Operation Barbarossa',
+      id: 'barbarossa', super: 'barbarossa', eras: ['1939'], date: [1941, 6, 22], actor: 'DEU', title: 'Operation Barbarossa',
       text: 'The Führer\'s long-awaited war of annihilation in the East is ready. Three army groups await the signal.',
       cond: G => alive(G, 'DEU') && alive(G, 'SOV') && !IM.War.isEnemy(G, G.tagId.DEU, G.tagId.SOV),
       options: [
@@ -118,7 +118,7 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'pearl_harbor', eras: ['1939', '1941'], date: [1941, 12, 7], actor: 'JPN', title: 'Climb Mount Niitaka',
+      id: 'pearl_harbor', super: 'pearl_harbor', eras: ['1939', '1941'], date: [1941, 12, 7], actor: 'JPN', title: 'Climb Mount Niitaka',
       text: 'The American oil embargo is strangling the Empire. The carrier strike force is in position north of Hawaii.',
       cond: G => alive(G, 'JPN') && alive(G, 'USA') && !IM.War.isEnemy(G, G.tagId.JPN, G.tagId.USA),
       options: [
@@ -135,13 +135,13 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'manhattan', eras: ['1939', '1941', '1945'], date: [1945, 7, 16], actor: 'USA', title: 'Trinity',
+      id: 'manhattan', super: 'trinity', eras: ['1939', '1941', '1945'], date: [1945, 7, 16], actor: 'USA', title: 'Trinity',
       text: 'In the New Mexico desert, a light brighter than a thousand suns. The Manhattan Project has succeeded.',
       cond: G => alive(G, 'USA'),
       options: [{ label: '"Now I am become Death..."', fx: G => { const u = byTag(G, 'USA'); u.researched.add('nuc_1945'); IM.Game.recomputeMods(G, u); u.stock.nuk += 2; } }],
     },
     {
-      id: 'august_storm', eras: ['1945'], date: [1945, 8, 9], actor: 'SOV', title: 'Operation August Storm',
+      id: 'august_storm', headline: 'SOVIET UNION DECLARES WAR ON JAPAN', news: `Honouring its promise at Yalta, the Soviet Union has attacked the Kwantung Army in Manchuria along a front thousands of kilometres long.`, eras: ['1945'], date: [1945, 8, 9], actor: 'SOV', title: 'Operation August Storm',
       text: 'As promised at Yalta, three months after the defeat of Germany we turn east against Japan\'s Kwantung Army.',
       cond: G => alive(G, 'SOV') && alive(G, 'JPN') && !IM.War.isEnemy(G, G.tagId.SOV, G.tagId.JPN) && !IM.War.atWar(G, G.tagId.SOV),
       options: [
@@ -151,13 +151,13 @@ window.IM = window.IM || {};
     },
     // ------------------------------------------------------------ 1991
     {
-      id: 'warsaw_dissolve', eras: ['1991'], date: [1991, 7, 1], actor: 'SOV', title: 'The Warsaw Pact Dissolves',
+      id: 'warsaw_dissolve', headline: 'WARSAW PACT DISSOLVED', news: `Meeting in Prague, the members of the Warsaw Treaty Organization have formally dissolved the alliance that faced NATO for 36 years.`, eras: ['1991'], date: [1991, 7, 1], actor: 'SOV', title: 'The Warsaw Pact Dissolves',
       text: 'In Prague, the members of the Warsaw Treaty Organization formally dissolve the alliance.',
       cond: G => factionOf(G, 'Warsaw Pact') >= 0,
       options: [{ label: 'An era ends', fx: G => { const fi = factionOf(G, 'Warsaw Pact'); for (const m of G.factions[fi].members) G.countries[m].faction = -1; G.factions[fi].members = []; G.relDirty = true; } }],
     },
     {
-      id: 'yugo_breakup', eras: ['1991'], date: [1991, 6, 25], actor: 'YUG', title: 'Slovenia and Croatia Secede',
+      id: 'yugo_breakup', headline: 'SLOVENIA AND CROATIA DECLARE INDEPENDENCE', news: `Ljubljana and Zagreb have proclaimed their independence from Yugoslavia. Federal army tanks are moving toward the new borders, and Europe fears its first war since 1945.`, eras: ['1991'], date: [1991, 6, 25], actor: 'YUG', title: 'Slovenia and Croatia Secede',
       text: 'Ljubljana and Zagreb have declared independence. The Yugoslav People\'s Army is mobilising.',
       cond: G => exists(G, 'YUG'),
       options: [
@@ -166,13 +166,13 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'bosnia', eras: ['1991'], date: [1992, 4, 6], actor: 'YUG', title: 'War in Bosnia',
+      id: 'bosnia', headline: 'SARAJEVO UNDER SIEGE', news: `Bosnia and Herzegovina has declared independence. Bosnian Serb forces backed by Belgrade have surrounded Sarajevo.`, eras: ['1991'], date: [1992, 4, 6], actor: 'YUG', title: 'War in Bosnia',
       text: 'Bosnia and Herzegovina has declared independence. Sarajevo is under siege.',
       cond: G => exists(G, 'YUG') && G.W.states.some(s => s.code === 'BIH' && G.countries[G.owner[s.id]].tag === 'YUG'),
       options: [{ label: 'Release Bosnia', fx: G => IM.Diplo.release(G, 'YUG', ['BIH'], { BIH: { ideo: 'democratic', leader: 'Alija Izetbegović' } }) }],
     },
     {
-      id: 'ussr_end', eras: ['1991'], date: [1991, 12, 26], actor: 'SOV', title: 'The End of the Soviet Union',
+      id: 'ussr_end', super: 'ussr_end', eras: ['1991'], date: [1991, 12, 26], actor: 'SOV', title: 'The End of the Soviet Union',
       text: 'The Belavezha Accords have been signed. Gorbachev prepares a resignation speech. The red flag over the Kremlin will come down tonight - unless we act.',
       cond: G => exists(G, 'SOV'),
       options: [
@@ -194,14 +194,14 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'czech_split', eras: ['1991'], date: [1993, 1, 1], actor: 'CZS', title: 'The Velvet Divorce',
+      id: 'czech_split', headline: 'CZECHOSLOVAKIA DISSOLVES PEACEFULLY', news: `At midnight Czechoslovakia ceased to exist, succeeded by the Czech Republic and Slovakia — a "Velvet Divorce" without a shot fired.`, eras: ['1991'], date: [1993, 1, 1], actor: 'CZS', title: 'The Velvet Divorce',
       text: 'Czech and Slovak leaders have agreed to dissolve the federation peacefully.',
       cond: G => exists(G, 'CZS'),
       options: [{ label: 'Go our separate ways', fx: G => { IM.Diplo.release(G, 'CZS', ['SVK'], { SVK: { ideo: 'democratic', leader: 'Michal Kováč' } }); setGov(G, 'CZS', { name: 'Czech Republic' }); } }],
     },
     // ------------------------------------------------------------ 2000
     {
-      id: '911', eras: ['2000'], date: [2001, 9, 11], actor: 'USA', title: 'September 11',
+      id: '911', super: 'sept11', eras: ['2000'], date: [2001, 9, 11], actor: 'USA', title: 'September 11',
       text: 'Hijacked airliners have struck the World Trade Center and the Pentagon. The trail leads to al-Qaeda camps in Taliban-ruled Afghanistan.',
       cond: G => alive(G, 'USA') && alive(G, 'AFG'),
       options: [
@@ -210,7 +210,7 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'iraq2003', eras: ['2000'], date: [2003, 3, 20], actor: 'USA', title: 'Shock and Awe',
+      id: 'iraq2003', headline: 'COALITION INVADES IRAQ', news: `American and British forces have crossed from Kuwait into Iraq after a night of strikes on Baghdad. Their stated aim: to disarm Iraq and remove Saddam Hussein.`, eras: ['2000'], date: [2003, 3, 20], actor: 'USA', title: 'Shock and Awe',
       text: 'The ultimatum to Saddam Hussein has expired. A coalition force waits in Kuwait.',
       cond: G => alive(G, 'USA') && alive(G, 'IRQ'),
       options: [
@@ -219,13 +219,13 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'montenegro', eras: ['2000'], date: [2006, 6, 3], actor: 'SRB', title: 'Montenegrin Independence',
+      id: 'montenegro', headline: 'MONTENEGRO CHOOSES INDEPENDENCE', news: `By a narrow margin, Montenegrin voters have chosen to leave their union with Serbia.`, eras: ['2000'], date: [2006, 6, 3], actor: 'SRB', title: 'Montenegrin Independence',
       text: 'Montenegro has voted narrowly for independence.',
       cond: G => exists(G, 'SRB'),
       options: [{ label: 'Accept the result', fx: G => { IM.Diplo.release(G, 'SRB', ['MNE'], { MNE: { ideo: 'democratic' } }); setGov(G, 'SRB', { name: 'Serbia', flag: 'SRB' }); } }],
     },
     {
-      id: 'georgia2008', eras: ['2000'], date: [2008, 8, 8], actor: 'RUS', title: 'The Five-Day War',
+      id: 'georgia2008', headline: 'RUSSIA AND GEORGIA AT WAR', news: `After fighting erupted in South Ossetia, Russian armour has poured through the Roki Tunnel into Georgia.`, eras: ['2000'], date: [2008, 8, 8], actor: 'RUS', title: 'The Five-Day War',
       text: 'Georgian forces have moved into South Ossetia. Our 58th Army is at the Roki Tunnel.',
       cond: G => alive(G, 'RUS') && alive(G, 'GEO') && byTag(G, 'GEO').faction < 0,
       options: [
@@ -234,13 +234,13 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'south_sudan', eras: ['2000'], date: [2011, 7, 9], actor: 'SDN', title: 'South Sudan Independence',
+      id: 'south_sudan', headline: 'SOUTH SUDAN IS BORN', news: `After decades of civil war and an overwhelming referendum, South Sudan has become the world's newest nation.`, eras: ['2000'], date: [2011, 7, 9], actor: 'SDN', title: 'South Sudan Independence',
       text: 'After decades of war, South Sudan becomes the world\'s newest nation.',
       cond: G => exists(G, 'SDN'),
       options: [{ label: 'Recognise Juba', fx: G => IM.Diplo.release(G, 'SDN', ['SSD'], { SSD: { leader: 'Salva Kiir' } }) }],
     },
     {
-      id: 'crimea', eras: ['2000'], date: [2014, 2, 27], actor: 'RUS', title: 'Polite People',
+      id: 'crimea', headline: 'RUSSIA ANNEXES CRIMEA', news: `Unmarked soldiers seized Crimea's parliament and airports; after a hastily organised referendum, Moscow has annexed the peninsula. In the Donbas, Russian-backed separatists have proclaimed "people's republics".`, eras: ['2000'], date: [2014, 2, 27], actor: 'RUS', title: 'Polite People',
       text: 'Ukraine\'s president has fled Kyiv. Unmarked soldiers are ready to seize Crimea, and separatists in the Donbas await our support.',
       cond: G => alive(G, 'RUS') && alive(G, 'UKR') && !IM.War.isEnemy(G, G.tagId.RUS, G.tagId.UKR),
       options: [
@@ -263,13 +263,13 @@ window.IM = window.IM || {};
     },
     // ------------------------------------------------------------ 2021-2026
     {
-      id: 'taliban', eras: ['2021'], date: [2021, 8, 15], actor: 'AFG', title: 'The Fall of Kabul',
+      id: 'taliban', headline: 'KABUL FALLS TO THE TALIBAN', news: `The Afghan government has collapsed as Taliban fighters entered Kabul unopposed. The president has fled, and thousands crowd the airport searching for a way out.`, eras: ['2021'], date: [2021, 8, 15], actor: 'AFG', title: 'The Fall of Kabul',
       text: 'The last Western troops are leaving. Provincial capitals have fallen one after another, and the Taliban are at the gates of Kabul.',
       cond: G => exists(G, 'AFG'),
       options: [{ label: 'The Islamic Emirate returns', fx: G => setGov(G, 'AFG', { name: 'Islamic Emirate of Afghanistan', ideo: 'authoritarian', leader: 'Hibatullah Akhundzada', stab: 0.5, flag: 'AFG_IE' }) }],
     },
     {
-      id: 'invasion2022', eras: ['2021'], date: [2022, 2, 24], actor: 'RUS', title: 'Special Military Operation',
+      id: 'invasion2022', super: 'invasion2022', eras: ['2021'], date: [2022, 2, 24], actor: 'RUS', title: 'Special Military Operation',
       text: 'Our forces are massed on three sides of Ukraine. The General Staff promises Kyiv in three days.',
       cond: G => alive(G, 'RUS') && alive(G, 'UKR') && !IM.War.isEnemy(G, G.tagId.RUS, G.tagId.UKR),
       options: [
@@ -278,7 +278,17 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'annex2022', eras: ['2021', '2022'], date: [2022, 9, 30], actor: 'RUS', title: 'The Referendums',
+      id: 'ukr_martial', eras: ['2021', '2022'], date: [2022, 2, 24], actor: 'UKR', title: 'We Are All Here',
+      headline: 'ZELENSKYY: "I NEED AMMUNITION, NOT A RIDE"', news: `Ukraine's president has refused offers to evacuate him from Kyiv, declaring general mobilisation as volunteers queue outside recruitment offices across the country.`,
+      text: 'Our allies are offering to fly the President out of Kyiv tonight. Outside the Presidential Office, volunteers are queuing for rifles. The world is watching to see whether Ukraine\'s government will stay or go. "The fight is here. I need ammunition, not a ride."',
+      wait: 30, cond: G => alive(G, 'UKR') && alive(G, 'RUS') && IM.War.isEnemy(G, G.tagId.UKR, G.tagId.RUS),
+      options: [
+        { label: '"We are all here." Defend Kyiv, general mobilisation', fx: G => { const u = byTag(G, 'UKR'); u.laws.draft = 3; u.ws = Math.min(1, u.ws + 0.1); u.stab = Math.min(1, u.stab + 0.05); u.pp += 40; IM.Game.raiseMilitia(G, u, 6); } },
+        { label: 'Move the government to Lviv', fx: G => { const u = byTag(G, 'UKR'); const l = G.W.stateByName.Lviv; if (G.owner[l.id] === u.id) u.capital = l.id; u.stab = Math.max(0, u.stab - 0.05); IM.Game.raiseMilitia(G, u, 3); } },
+      ],
+    },
+    {
+      id: 'annex2022', headline: 'RUSSIA ANNEXES OCCUPIED UKRAINIAN REGIONS', news: `After referendums condemned around the world, the Kremlin has declared the occupied regions of Ukraine part of Russia.`, eras: ['2021', '2022'], date: [2022, 9, 30], actor: 'RUS', title: 'The Referendums',
       text: 'Referendums have been held in the occupied territories. The Kremlin prepares to declare them part of Russia.',
       cond: G => alive(G, 'RUS') && G.wars.some(w => w.name === 'Russo-Ukrainian War'),
       options: [
@@ -296,19 +306,19 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'fin_nato', eras: ['2021', '2022'], date: [2023, 4, 4], actor: 'FIN', title: 'Finland Joins NATO',
+      id: 'fin_nato', headline: 'FINLAND JOINS NATO', news: `Ending decades of military non-alignment, Finland has become NATO's 31st member, doubling the alliance's border with Russia.`, eras: ['2021', '2022'], date: [2023, 4, 4], actor: 'FIN', title: 'Finland Joins NATO',
       text: 'Decades of neutrality end. The Finnish flag is raised in Brussels.',
       cond: G => alive(G, 'FIN') && factionOf(G, 'NATO') >= 0 && byTag(G, 'FIN').faction < 0,
       options: [{ label: 'Welcome to the Alliance', fx: G => joinFactionByName(G, 'FIN', 'NATO') }],
     },
     {
-      id: 'swe_nato', eras: ['2021', '2022'], date: [2024, 3, 7], actor: 'SWE', title: 'Sweden Joins NATO',
+      id: 'swe_nato', headline: 'SWEDEN JOINS NATO', news: `Two centuries of Swedish neutrality end as Sweden becomes NATO's 32nd member.`, eras: ['2021', '2022'], date: [2024, 3, 7], actor: 'SWE', title: 'Sweden Joins NATO',
       text: 'After two centuries of neutrality, Sweden becomes NATO\'s 32nd member.',
       cond: G => alive(G, 'SWE') && factionOf(G, 'NATO') >= 0 && byTag(G, 'SWE').faction < 0,
       options: [{ label: 'Welcome to the Alliance', fx: G => joinFactionByName(G, 'SWE', 'NATO') }],
     },
     {
-      id: 'ceasefire', eras: ['2026'], date: [2026, 9, 1], actor: 'RUS', title: 'Ceasefire Talks',
+      id: 'ceasefire', headline: 'CEASEFIRE IN UKRAINE', news: `After years of war, Russia and Ukraine have agreed to freeze the front line where it stands.`, eras: ['2026'], date: [2026, 9, 1], actor: 'RUS', title: 'Ceasefire Talks',
       text: 'Mediators propose freezing the front line where it stands. Both armies are exhausted.',
       cond: G => alive(G, 'RUS') && alive(G, 'UKR') && G.wars.some(w => w.name === 'Russo-Ukrainian War') && !byTag(G, 'UKR').isPlayer,
       options: [
@@ -324,7 +334,7 @@ window.IM = window.IM || {};
       ],
     },
     {
-      id: 'taiwan', eras: ['2021', '2022', '2026'], date: [2027, 8, 1], actor: 'CHN', title: 'Taiwan Strait Crisis',
+      id: 'taiwan', super: 'taiwan', eras: ['2021', '2022', '2026'], date: [2027, 8, 1], actor: 'CHN', title: 'Taiwan Strait Crisis',
       text: 'The PLA has completed its modernisation targets for 2027. Amphibious groups are loading in Fujian. The Central Military Commission awaits the Chairman\'s word.',
       cond: G => alive(G, 'CHN') && alive(G, 'TWN') && !IM.War.atWar(G, G.tagId.CHN),
       options: [
@@ -358,19 +368,26 @@ window.IM = window.IM || {};
         G.pendingEvents.push({ id: ev.id, actor: true });
       } else {
         const pick = ev.aiChance !== undefined && Math.random() > ev.aiChance ? ev.options.length - 1 : 0;
-        ev.options[pick].fx(G);
+        G._eventFiring = true;
+        try { ev.options[pick].fx(G); } finally { G._eventFiring = false; }
         G.relDirty = true;
-        if (pick === 0 && ev.options.length > 1) {
-          IM.Game.news(G, `${ev.title} (${actor.name})`, 'event');
-          if (G.player !== null) G.pendingEvents.push({ id: ev.id, actor: false });
-        }
+        if (pick === 0) E.announce(G, ev, actor);
       }
     }
   };
 
+  // Tell the player about an event that happened: a super event or a news story.
+  E.announce = function (G, ev, actor) {
+    if (ev.super) IM.Game.headline(G, { type: 'super', key: ev.super, tags: [ev.actor] });
+    else if (ev.headline) IM.Game.headline(G, { type: 'news', title: ev.headline, text: ev.news, tags: [ev.actor], major: true, art: { kind: 'flags', flags: [ev.actor] } });
+    if (ev.options.length > 1 || ev.super) IM.Game.news(G, `${ev.title} (${actor.name})`, 'event');
+  };
+
   E.resolve = function (G, id, optIndex) {
     const ev = EV.find(e => e.id === id);
-    ev.options[optIndex].fx(G);
+    G._eventFiring = true;
+    try { ev.options[optIndex].fx(G); } finally { G._eventFiring = false; }
+    if (optIndex === 0 && ev.super) IM.Game.headline(G, { type: 'super', key: ev.super, tags: [ev.actor] });
     G.relDirty = true;
     IM.War.rebuildRelations(G);
     IM.Game.news(G, `${ev.title}: ${ev.options[optIndex].label}`, 'event');

@@ -228,6 +228,31 @@ window.IM = window.IM || {};
     G.fort[hex] = Math.max(0, G.fort[hex] - 1);
     G.mapDirty = true; G.supplyDirty = true;
     const s = W.states[st];
+    if (hex === s.cityHex && G.countries[ownerId].capital === st && to !== ownerId && prev === ownerId && G.player !== null) {
+      const owner = G.countries[ownerId], nc = G.countries[to];
+      const key = st + ':' + to, seen = (G._fallen = G._fallen || {});
+      if (!(seen[key] > G.hour - 24 * 90) && (IM.Game.notable(G, ownerId) || IM.Game.notable(G, to))) {
+        seen[key] = G.hour;
+        const big = s.vp >= 15 || ownerId === G.player;
+        IM.Game.headline(G, {
+          type: big ? 'super' : 'news', tags: [nc.tag, owner.tag], major: true,
+          title: big ? `The Fall of ${s.name}` : `${s.name.toUpperCase()} FALLS`,
+          text: `${nc.name} troops have entered ${s.name}, the capital of ${owner.name}. ${owner.capitulated ? '' : `The government of ${owner.name} vows to fight on from the provinces.`} Across the world, the news is read as a turning point in the war.`,
+          art: { kind: 'map', focus: s.name, span: 18, red: [nc.tag], blue: [owner.tag], mark: s.name },
+        });
+      }
+    }
+    else if (hex === s.cityHex && s.vp >= 10 && G.player !== null && (ownerId === G.player || to === G.player || prev === G.player) && G.hour - (G._cityNews || -1e9) > 24 * 5) {
+      G._cityNews = G.hour;
+      const owner = G.countries[ownerId], nc = G.countries[to];
+      const ours = to === G.player;
+      IM.Game.headline(G, {
+        type: 'news', major: false, tags: [nc.tag, owner.tag],
+        title: ours ? `${s.name.toUpperCase()} TAKEN` : to === ownerId ? `${s.name.toUpperCase()} LIBERATED` : `${s.name.toUpperCase()} FALLS TO ${nc.name.toUpperCase()}`,
+        text: to === ownerId ? `${owner.name} forces have retaken ${s.name} after heavy fighting. Crowds greet the troops in the ruined streets.` : `After fierce fighting, ${nc.name} troops have captured ${s.name}, one of the most important cities of ${owner.name}. Refugees crowd the roads away from the front.`,
+        art: { kind: 'map', focus: s.name, span: 20, red: [nc.tag], blue: [owner.tag], mark: s.name },
+      });
+    }
     if (hex === s.cityHex && s.vp >= 5) {
       const pc = G.countries[prev], nc = G.countries[to];
       const involvesPlayer = pc && (pc.isPlayer || nc.isPlayer);
@@ -543,6 +568,15 @@ window.IM = window.IM || {};
     c.capitulated = true;
     IM.Game.news(G, `${c.name} has capitulated!`, 'major');
     if (c.isPlayer && IM.UI && IM.UI.onPlayerCapitulated) IM.UI.onPlayerCapitulated(G);
+    else if (IM.Game.notable(G, c.id)) {
+      const cap = W.states[c.capital];
+      IM.Game.headline(G, {
+        type: 'news', major: true, tags: [c.tag],
+        title: `${c.name.toUpperCase()} CAPITULATES`,
+        text: `The armed forces of ${c.name} have laid down their arms. ${enemies.slice(0, 3).map(e => G.countries[e].name).join(', ')} now occupy the country. Its fate will be decided at the peace table.`,
+        art: { kind: 'map', focus: cap.name, span: 22, red: enemies.map(e => G.countries[e].tag), blue: [c.tag], mark: cap.name },
+      });
+    }
     for (const w of G.wars) if (w.att.includes(c.id) || w.def.includes(c.id)) w.cap.add(c.id);
     for (const d of G.divisions) if (d.owner === c.id) d.dead = true;
     G.divisions = G.divisions.filter(d => !d.dead);
@@ -624,6 +658,14 @@ window.IM = window.IM || {};
       else if (loseSet.has(G.player)) IM.UI.onWarEnded(G, w, kind === 'white' ? 'white' : 'lost');
     }
     const names = (arr) => arr.map(i => G.countries[i].name).slice(0, 3).join(', ') + (arr.length > 3 ? '…' : '');
+    if ([...winners, ...losers].some(x => IM.Game.notable(G, x)) && !winSet.has(G.player) && !loseSet.has(G.player)) {
+      IM.Game.headline(G, {
+        type: 'news', major: false, tags: [G.countries[winners[0]].tag, G.countries[losers[0]].tag],
+        title: kind === 'white' ? `PEACE SIGNED: ${w.name.toUpperCase()} ENDS` : `${w.name.toUpperCase()} IS OVER`,
+        text: kind === 'white' ? `The belligerents of the ${w.name} have agreed to a white peace. Borders return to where they stood before the fighting.` : `${names(winners)} have prevailed over ${names(losers)}. The victors will annex the territory they hold.`,
+        art: { kind: 'flags', flags: [G.countries[winners[0]].tag, G.countries[losers[0]].tag], vs: true },
+      });
+    }
     IM.Game.news(G, kind === 'white' ? `White peace ends the ${w.name}.` : `The ${w.name} is over: ${names(winners)} prevailed over ${names(losers)}.`, 'major');
     G.relDirty = true; G.mapDirty = true; G.supplyDirty = true;
     War.rebuildRelations(G);
@@ -691,6 +733,17 @@ window.IM = window.IM || {};
     War.rebuildRelations(G);
     const extra = defArr.length > 1 ? ` (${defArr.length - 1} allies join the defence)` : '';
     IM.Game.news(G, `${A.name} has declared war on ${T.name}!${extra}`, 'major');
+    if (!G._eventFiring && (IM.Game.notable(G, attacker) || IM.Game.notable(G, target))) {
+      const W = G.W, ac = W.states[A.capital], tc = W.states[T.capital];
+      const near = W.hexDist(ac.cityHex, tc.cityHex) < 30;
+      const allies = defArr.filter(x => x !== target).map(x => G.countries[x].name);
+      IM.Game.headline(G, {
+        type: 'news', major: true, tags: [A.tag, T.tag],
+        title: `${A.name.toUpperCase()} DECLARES WAR ON ${T.name.toUpperCase()}`,
+        text: `${A.name}, led by ${A.leader}, has declared war on ${T.name}. ${allies.length ? `${allies.slice(0, 4).join(', ')}${allies.length > 4 ? ' and others' : ''} have rallied to ${T.name}'s side.` : `${T.name} stands alone.`} The ${war.name} has begun.`,
+        art: near ? { kind: 'map', focus: tc.name, span: 24, red: attArr.map(x => G.countries[x].tag), blue: defArr.map(x => G.countries[x].tag), axes: [[ac.name, tc.name]] } : { kind: 'flags', flags: [A.tag, T.tag], vs: true },
+      });
+    }
     return null;
   };
 

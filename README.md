@@ -72,6 +72,8 @@ Each era has its own borders, colonial empires, factions (Allies, Axis, Cominter
 - **Emergency militia** — threatened cities raise territorial-defense units at short notice.
 - **AI generals** — delegate any group of divisions (or the whole army) to the AI.
 - **Attack-odds preview** — hover an enemy stack with divisions selected.
+- **News panel** — world events appear on half the screen as a 1939-era broadsheet (The Evening Dispatch) or, from 1991 on, a live TV news bulletin, with a map of the action. Choose All news, Major only or Off.
+- **Super events** — full-screen moments for turning points (the invasion of Poland, Barbarossa, Pearl Harbor, Trinity, Desert Storm, the fall of the USSR, 9/11, the 2022 invasion of Ukraine, a Taiwan war, any nuclear strike, the fall of a great capital) with an animated map of the offensive, a historical quote, a nation-specific account and synthesized sound.
 - Real flags for every nation, with period-correct flags for historical states (Soviet Union, Manchukuo, Vichy France, Free France, the British Raj, pre-1965 Canada, Ichkeria and more).
 - A nation-selection screen with briefings, difficulty ratings and strength comparisons for each era's powers.
 - Saving and loading (stored in your browser).

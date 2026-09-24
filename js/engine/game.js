@@ -32,6 +32,24 @@ window.IM = window.IM || {};
     if (IM.UI && IM.UI.onNews) IM.UI.onNews(G, G.news[0]);
   };
 
+  // Newsworthy moments for the player's news panel / super events.
+  Game.headline = function (G, item) {
+    if (G.player === null || G.player === undefined) return;
+    item.hour = G.hour;
+    (G.headlines = G.headlines || []).push(item);
+  };
+  // Is this nation interesting to the player? (a power, a neighbour, an ally or enemy)
+  Game.notable = function (G, id) {
+    if (id === G.player) return true;
+    const c = G.countries[id];
+    if (!c) return false;
+    if ((c.divTarget || 0) >= 20) return true;
+    const r = IM.War.relation(G, G.player, id);
+    if (r === 2) return true;
+    if (r === 1 && (c.divTarget || 0) >= 8) return true;
+    return false;
+  };
+
   Game.dateOf = function (G) { return new Date(G.startMs + G.hour * 3600e3); };
   Game.year = function (G) { const d = Game.dateOf(G); return d.getUTCFullYear() + d.getUTCMonth() / 12; };
   Game.fmtDate = function (G, withHour) {
