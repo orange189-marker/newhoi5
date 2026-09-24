@@ -174,7 +174,8 @@ window.IM = window.IM || {};
     root.appendChild(h('div', { class: 'screen' },
       h('div', { class: 'screen-head' }, h('h2', null, 'Load Game')),
       h('div', { style: { width: 'min(520px, 92vw)' } }, list.map(e => h('div', { class: 'list-item click', onclick: () => {
-        const G = IM.Save.load(e.name); if (!G) return alert('Save could not be loaded');
+        const G = IM.Save.load(e.name);
+        if (!G) { UI.modal('Load failed', h('div', null, 'This save could not be read. It may come from an older version of the game.'), [{ label: 'OK', primary: true }]); return; }
         UI.G = G; enterGame();
       } }, h('div', { class: 'grow' }, h('b', null, e.name), h('div', { class: 'muted small' }, `${e.era} era · ${e.date}`)),
       h('button', { class: 'btn small danger', onclick: ev => { ev.stopPropagation(); IM.Save.remove(e.name); UI.showLoad(); } }, 'Delete')))),
