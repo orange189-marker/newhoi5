@@ -22,7 +22,7 @@ window.IM = window.IM || {};
       }
       if ((day + c.id) % 7 === 0) economy(G, c, atWar);
       if (atWar && (day + c.id) % 3 === 0 && c.pp >= Game().MILITIA_PP && Game().raiseMilitia(G, c, 3)) c.pp -= Game().MILITIA_PP;
-      if (atWar) military(G, c, () => true);
+      if (atWar && (c.divTarget >= 8 || (day + c.id) % 2 === 0)) military(G, c, () => true);
       else if ((day + c.id) % 10 === 0) peacetime(G, c);
       if ((day + c.id) % 15 === 0) diplomacy(G, c, atWar, day);
     }
@@ -98,6 +98,18 @@ window.IM = window.IM || {};
   }
 
   // ------------------------------------------------------------------ fronts
+  // Land hexes bordering a hex held by someone else; recomputed each day.
+  function contactHexes(G) {
+    const day = Math.floor(G.hour / 24);
+    if (G._contact && G._contactDay === day) return G._contact;
+    const W = G.W, out = [];
+    for (const h of W.land) {
+      const o = G.ctrl[h];
+      for (let k = 0; k < 6; k++) { const j = W.nb[h * 6 + k]; if (j >= 0 && W.region[j] && G.ctrl[j] !== o) { out.push(h); break; } }
+    }
+    G._contact = out; G._contactDay = day;
+    return out;
+  }
   function power(G, d) { const s = War().stats(G, d); return (s.sa + s.ha + s.def * 0.5) * d.str * (0.3 + 0.7 * d.org / s.org); }
 
   function military(G, c, filter) {
@@ -114,7 +126,7 @@ window.IM = window.IM || {};
     const threatCache = o => { if (o < 0) return false; let v = tc.get(o); if (v === undefined) tc.set(o, v = War().threatening(G, c.id, o)); return v; };
     // front hexes
     const need = new Map(), foreign = new Set();
-    for (const h of W.land) {
+    for (const h of contactHexes(G)) {
       const o = G.ctrl[h];
       if (rel(o) !== 1) continue;
       let threat = 0, touches = false;
@@ -155,12 +167,10 @@ window.IM = window.IM || {};
     if (safe.length) {
       const pocketed = mine.filter(d => !d.path.length && d.battle < 0 && W.region[d.hex] && (exposed(d.hex) || !d.supplied));
       if (pocketed.length) {
-        const f = flowField(G, c, safe, pocketed.map(d => d.hex));
+        const f = flowField(G, c, safe, pocketed.map(d => d.hex), 10);
         for (const d of pocketed) {
-          if (!isFinite(f.dist[d.hex]) || f.dist[d.hex] > 8) continue;
-          const src = f.src[d.hex], path = []; let x = d.hex, g = 0;
-          while (x !== src && g++ < 50) { x = f.next[x]; if (x < 0) break; path.push(x); }
-          if (x === src && path.length) War().setPath(G, d, path);
+          const path = f.pathFrom(d.hex);
+          if (path && path.length) War().setPath(G, d, path);
         }
       }
     }
@@ -186,19 +196,18 @@ window.IM = window.IM || {};
       idle.push(d);
     }
     if (deficit.size && idle.length) {
-      const f = flowField(G, c, [...deficit.keys()], idle.map(d => d.hex));
-      idle.sort((a, b) => (f.dist[a.hex] || 1e9) - (f.dist[b.hex] || 1e9));
+      const f = flowField(G, c, [...deficit.keys()], idle.map(d => d.hex), 60);
+      idle.sort((a, b) => f.distOf(a.hex) - f.distOf(b.hex));
       let abroad = G.divisions.filter(d => d.owner === c.id && foreign.has(d.path.length ? d.path[d.path.length - 1] : d.hex)).length;
       const abroadCap = Math.floor(mine.length * (foreign.size === need.size ? 1 : 0.3));
       for (const d of idle) {
-        if (!isFinite(f.dist[d.hex]) || f.dist[d.hex] > 60) continue;
-        const src = f.src[d.hex];
+        if (!isFinite(f.distOf(d.hex))) continue;
+        const src = f.srcOf(d.hex);
         if (!(deficit.get(src) > 0)) continue;
-        if (foreign.has(src)) { if (abroad >= abroadCap) continue; abroad++; }
-        const path = [];
-        let h = d.hex, guard = 0;
-        while (h !== src && guard++ < 3000) { h = f.next[h]; if (h < 0) break; path.push(h); }
-        if (h !== src) continue;
+        if (foreign.has(src) && abroad >= abroadCap) continue;
+        const path = f.pathFrom(d.hex);
+        if (!path) continue;
+        if (foreign.has(src)) abroad++;
         War().setPath(G, d, path);
         deficit.set(src, deficit.get(src) - 1);
       }
@@ -208,27 +217,30 @@ window.IM = window.IM || {};
   }
 
   // Multi-source Dijkstra from targets over hexes this country can move through.
-  function flowField(G, c, sources, wanted) {
+  // Buffers are reused between calls; the search stops once every wanted hex
+  // is settled or the distance limit is reached.
+  let buf = null;
+  function flowField(G, c, sources, wanted, maxDist) {
     const W = G.W, n = W.n;
+    maxDist = maxDist || 45;
+    if (!buf || buf.n !== n) buf = { n, dist: new Float64Array(n), next: new Int32Array(n), src: new Int32Array(n), stamp: new Uint32Array(n), done: new Uint32Array(n), want: new Uint32Array(n), gen: 0 };
+    const gen = ++buf.gen, { dist, next, src, stamp, done, want } = buf;
     War().relation(G, 0, 0);
     const R = G.rel, RB = c.id * G.relN;
-    const want = new Uint8Array(n);
     let remaining = 0;
-    if (wanted) for (const h of wanted) if (!want[h]) { want[h] = 1; remaining++; }
-    const dist = new Float64Array(n).fill(Infinity), next = new Int32Array(n).fill(-1), src = new Int32Array(n).fill(-1);
+    if (wanted) for (const h of wanted) if (want[h] !== gen) { want[h] = gen; remaining++; }
     const canSea = c.stock.nav > 0 || c.faction >= 0;
     const heap = new IM.Heap();
-    for (const s of sources) { dist[s] = 0; src[s] = s; heap.push(s, 0); }
-    const done = new Uint8Array(n);
+    for (const s of sources) { stamp[s] = gen; dist[s] = 0; src[s] = s; next[s] = -1; heap.push(s, 0); }
     while (heap.size) {
       const h = heap.pop();
-      if (done[h]) continue;
-      done[h] = 1;
-      if (wanted && want[h] && --remaining <= 0) break;
+      if (done[h] === gen) continue;
+      done[h] = gen;
+      if (wanted && want[h] === gen && --remaining <= 0) break;
       const dh = dist[h];
       for (let k = 0; k < 6; k++) {
         const j = W.nb[h * 6 + k];
-        if (j < 0) continue;
+        if (j < 0 || done[j] === gen) continue;
         let cost;
         if (!W.region[j]) { if (!canSea) continue; cost = 0.8 + (W.region[h] ? 4 : 0); }
         else {
@@ -238,10 +250,20 @@ window.IM = window.IM || {};
           if (!W.region[h]) cost += 4;
         }
         const nd = dh + cost;
-        if (nd < dist[j]) { dist[j] = nd; next[j] = h; src[j] = src[h]; heap.push(j, nd); }
+        if (nd > maxDist) continue;
+        if (stamp[j] !== gen || nd < dist[j]) { stamp[j] = gen; dist[j] = nd; next[j] = h; src[j] = src[h]; heap.push(j, nd); }
       }
     }
-    return { dist, next, src };
+    const distOf = h => (stamp[h] === gen && done[h] === gen ? dist[h] : Infinity);
+    // Path from hex h to its nearest source (excluding h itself), or null.
+    const pathFrom = h => {
+      if (!isFinite(distOf(h))) return null;
+      const target = src[h], path = [];
+      let x = h, guard = 0;
+      while (x !== target && guard++ < 4000) { x = next[x]; if (x < 0) return null; path.push(x); }
+      return x === target ? path : null;
+    };
+    return { distOf, pathFrom, srcOf: h => src[h] };
   }
 
   function attacks(G, c, mine, need, byHex) {
@@ -328,15 +350,13 @@ window.IM = window.IM || {};
     if (!border.length) return;
     const borderSet = new Set(border);
     const idle = mine.filter(d => !borderSet.has(d.hex)).slice(0, Math.ceil(mine.length * 0.7));
-    const f = flowField(G, c, border, idle.map(d => d.hex));
+    const f = flowField(G, c, border, idle.map(d => d.hex), 40);
     const taken = new Map();
     for (const d of idle) {
-      if (!isFinite(f.dist[d.hex])) continue;
-      const src = f.src[d.hex];
-      if ((taken.get(src) || 0) >= 2) continue;
-      const path = []; let h = d.hex, g = 0;
-      while (h !== src && g++ < 3000) { h = f.next[h]; if (h < 0) break; path.push(h); }
-      if (h === src) { War().setPath(G, d, path); taken.set(src, (taken.get(src) || 0) + 1); }
+      const src = f.srcOf(d.hex);
+      if (!isFinite(f.distOf(d.hex)) || (taken.get(src) || 0) >= 2) continue;
+      const path = f.pathFrom(d.hex);
+      if (path) { War().setPath(G, d, path); taken.set(src, (taken.get(src) || 0) + 1); }
     }
   }
 

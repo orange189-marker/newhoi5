@@ -165,6 +165,7 @@ window.IM = window.IM || {};
     IM.Panels.buildHUD();
     R.showUnits = true;
     IM.Game.news(G, `You lead ${c.name}. The game is paused — press Space to begin.`, 'major');
+    setTimeout(() => IM.Panels.toast({ text: 'Tip: select divisions and right-click to move. Army → "Delegate all" hands your fronts to an AI general.', kind: 'info' }), 400);
   }
 
   UI.showLoad = function () {
@@ -227,6 +228,19 @@ window.IM = window.IM || {};
   };
 
   UI.onNews = function (G, n) { if (UI.screen === 'game' && IM.Panels) IM.Panels.toast(n); };
+  UI.onWarEnded = function (G, w, result) {
+    const title = result === 'won' ? 'Victory!' : result === 'lost' ? 'Defeat' : 'Peace';
+    const text = result === 'won' ? `The ${w.name} is over and we stand victorious. Occupied enemy states have been annexed at the peace conference.`
+      : result === 'lost' ? `The ${w.name} has ended in defeat. The victors have carved up the territory they occupy.`
+      : `A white peace ends the ${w.name}. Borders return to where they stood before the war.`;
+    UI.paused = true;
+    setTimeout(() => UI.modal(title, UI.h('div', null, text), [{ label: 'Continue', primary: true }]), 30);
+  };
+  UI.onPlayerCapitulated = function (G) {
+    UI.paused = true;
+    setTimeout(() => UI.modal('Capitulation', UI.h('div', null, `${G.countries[G.player].name} has capitulated. Our government fights on in exile — if our allies win the war, our lands will be restored.`),
+      [{ label: 'Continue in exile', primary: true }, { label: 'Main menu', fn: UI.showMenu }]), 30);
+  };
   UI.onPlayerDefeated = function (G) {
     UI.paused = true;
     setTimeout(() => UI.modal('Defeat', h('div', null, `${G.countries[G.player].name} has been wiped from the map. You may continue watching the world, or return to the menu.`),

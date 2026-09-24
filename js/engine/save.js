@@ -12,8 +12,8 @@ window.IM = window.IM || {};
       firedEvents: [...G.firedEvents], factions: G.factions, core: G.core, warSeq: G.warSeq, aiMode: G.aiMode,
       wars: G.wars.map(w => ({ ...w, cap: [...w.cap] })),
       news: G.news.slice(0, 30),
-      divisions: G.divisions.map(d => ({ ...d })),
-      battles: [...G.battles.values()].map(b => ({ ...b, att: [...b.att] })),
+      divisions: G.divisions.filter(d => !d.dead).map(d => ({ ...d })),
+      battles: [...G.battles.values()].map(b => ({ hex: b.hex, hours: b.hours, attOwner: b.attOwner, att: [...b.att] })),
       countries: G.countries.map(c => {
         const o = { ...c, statCache: null, _st: null };
         for (const f of SET_FIELDS) o[f] = [...c[f]];

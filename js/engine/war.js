@@ -542,6 +542,7 @@ window.IM = window.IM || {};
     if (!enemies.length) return;
     c.capitulated = true;
     IM.Game.news(G, `${c.name} has capitulated!`, 'major');
+    if (c.isPlayer && IM.UI && IM.UI.onPlayerCapitulated) IM.UI.onPlayerCapitulated(G);
     for (const w of G.wars) if (w.att.includes(c.id) || w.def.includes(c.id)) w.cap.add(c.id);
     for (const d of G.divisions) if (d.owner === c.id) d.dead = true;
     G.divisions = G.divisions.filter(d => !d.dead);
@@ -617,6 +618,10 @@ window.IM = window.IM || {};
       }
       // units standing in now-foreign land walk home
       for (const d of G.divisions) if (d.owner === id && W.region[d.hex] && War.relation(G, id, G.ctrl[d.hex]) === 0) evacuate(G, d);
+    }
+    if (G.player !== null && IM.UI && IM.UI.onWarEnded) {
+      if (winSet.has(G.player)) IM.UI.onWarEnded(G, w, kind === 'white' ? 'white' : 'won');
+      else if (loseSet.has(G.player)) IM.UI.onWarEnded(G, w, kind === 'white' ? 'white' : 'lost');
     }
     const names = (arr) => arr.map(i => G.countries[i].name).slice(0, 3).join(', ') + (arr.length > 3 ? '…' : '');
     IM.Game.news(G, kind === 'white' ? `White peace ends the ${w.name}.` : `The ${w.name} is over: ${names(winners)} prevailed over ${names(losers)}.`, 'major');
