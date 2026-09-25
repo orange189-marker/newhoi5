@@ -31,8 +31,26 @@ window.IM = window.IM || {};
     window.addEventListener('resize', R.resize);
   };
 
+  // ------------------------------------------------------------------ graphics quality
+  // 'high' draws relief, glow, minor rivers and peaks at up to 2x pixel density;
+  // 'low' draws at 1x with the essentials only. 'auto' picks by device and drops
+  // to low by itself if the map is slow to redraw.
+  const store = { get(k, d) { try { return localStorage.getItem('ironMeridian.' + k) || d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('ironMeridian.' + k, v); } catch (e) { /* unavailable */ } } };
+  R.qualityPref = store.get('quality', 'auto');
+  const weakDevice = () => {
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    return (coarse && Math.min(screen.width, screen.height) < 820) || (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
+  };
+  R.quality = R.qualityPref === 'auto' ? (weakDevice() ? 'low' : 'high') : R.qualityPref;
+  let slowBuilds = 0;
+  R.setQuality = function (pref) {
+    R.qualityPref = pref; store.set('quality', pref);
+    R.quality = pref === 'auto' ? (weakDevice() ? 'low' : 'high') : pref;
+    slowBuilds = 0; base = null; R.resize();
+  };
+
   R.resize = function () {
-    dpr = window.devicePixelRatio || 1;
+    dpr = Math.min(window.devicePixelRatio || 1, R.quality === 'low' ? 1 : 2);
     canvas.width = Math.round(canvas.clientWidth * dpr);
     canvas.height = Math.round(canvas.clientHeight * dpr);
     R.dirty = true;
@@ -107,9 +125,11 @@ window.IM = window.IM || {};
       return '#7a7a70';
     }
     if (R.mode === 'ideology') return IM.IDEOLOGIES[c.ideo].color;
-    if (R.mode === 'supply' && G.player !== null) {
-      const own = G.owner[W.stateOf[i]];
-      return own === G.player ? '#5b7d4a' : '#555';
+    if (R.mode === 'supply' && G.player !== null && R._supply) {
+      if (o !== G.player && IM.War.relation(G, G.player, o) === 2) return '#6b3a36';
+      if (o !== G.player && IM.War.relation(G, G.player, o) !== 1) return '#4f4f4a';
+      const d = R._supply[i];
+      return d <= IM.War.SUPPLY_RANGE ? '#3e8a4c' : d <= 16 ? '#a39a3a' : d < 255 ? '#b8742e' : '#b8322e';
     }
     return c.color;
   }
@@ -201,7 +221,8 @@ window.IM = window.IM || {};
     let h = G._rid * 7919;
     for (const i of W.land) h = (h * 31 + G.ctrl[i]) | 0;
     for (let i = 0; i < G.owner.length; i++) h = (h * 17 + G.owner[i]) | 0;
-    return `${h}|${R.mode}|${R.focusOwner ?? -1}|${G.wars.length}|${G.factions.length}|${G.player}`;
+    if (R.mode === 'supply') h = (h * 31 + ((G.hour / 24) | 0)) | 0;
+    return `${h}|${R.mode}|${R.focusOwner ?? -1}|${G.wars.length}|${G.factions.length}|${G.player}|${R.quality}`;
   }
   function ensureBase(G, vw, vh) {
     const now = performance.now(), key = mapKey(G), z = cam.z;
@@ -209,13 +230,15 @@ window.IM = window.IM || {};
     const zoomOk = b => b && b.z / z < 1.3 && z / b.z < 1.3;
     if (base && base.G === G && covers(base) && zoomOk(base) && base.key === key) return base;
     // throttle rebuilds while territory churns or while zooming; show the stale image meanwhile
-    if (base && base.G === G && covers(base) && now - base.t < (base.key !== key ? (z < 1.2 ? 900 : 400) : 140)) { R.dirty = true; return base; }
+    const slow = R.quality === 'low' ? 1.6 : 1;
+    if (base && base.G === G && covers(base) && now - base.t < (base.key !== key ? (z < 1.2 ? 900 : 400) : 140) * slow) { R.dirty = true; return base; }
     const mx = vw * 0.35, my = vh * 0.35;
     const rect = { x: cam.x - mx, y: cam.y - my, w: vw + mx * 2, h: vh + my * 2 };
     let scale = z * dpr;
-    const maxPx = 5200;
+    const maxPx = R.quality === 'low' ? 3000 : 5200;
     if (rect.w * scale > maxPx) scale = maxPx / rect.w;
     if (rect.h * scale > maxPx) scale = Math.min(scale, maxPx / rect.h);
+    R._supply = R.mode === 'supply' && G.player !== null ? IM.War.supplyDepth(G, G.player) : null;
     const cv = base && base.canvas || document.createElement('canvas');
     cv.width = Math.ceil(rect.w * scale); cv.height = Math.ceil(rect.h * scale);
     const c = cv.getContext('2d');
@@ -227,6 +250,11 @@ window.IM = window.IM || {};
       baseLayer(G, rect.x - off, rect.y, rect.w, rect.h, z);
     }
     ctx = saved;
+    // on 'auto', repeated slow redraws switch to low quality
+    if (R.qualityPref === 'auto' && R.quality === 'high') {
+      c.getImageData(0, 0, 1, 1); // make the browser finish drawing before timing
+      if (performance.now() - now > 450 && ++slowBuilds >= 3) { R.quality = 'low'; R.resize(); if (IM.Panels && IM.Panels.toast) IM.Panels.toast({ text: 'Graphics set to Low for a smoother map (Game menu → Graphics).', kind: 'info' }); }
+    }
     base = { canvas: cv, x: rect.x, y: rect.y, w: rect.w, h: rect.h, z, key, t: now, G };
     return base;
   }
@@ -244,7 +272,7 @@ window.IM = window.IM || {};
   function baseLayer(G, x0, y0, vw, vh, px) {
     const hexPx = HW * px;
     const vis = visibleHexes(x0, y0, vw, vh);
-    const Geo = IM.Geo, proxy = Geo.proxy, low = hexPx < 11;
+    const Geo = IM.Geo, proxy = Geo.proxy, lowQ = R.quality === 'low', low = hexPx < (lowQ ? 14 : 11);
     const cells = [];
     for (const i of vis) if (proxy[i] >= 0) cells.push(i);
     // edge columns wrapped across the seam
@@ -259,7 +287,7 @@ window.IM = window.IM || {};
     ctx.save();
     ctx.beginPath(); ctx.rect(-HW * 0.2, y0 - vh, R.worldW + HW * 0.4, vh * 3); ctx.clip();
     // shallow-water glow along the real coastline
-    if (hexPx > 6) { ctx.strokeStyle = 'rgba(110,160,190,0.16)'; ctx.lineWidth = Math.max(5 / px, HW * 0.45); ctx.lineJoin = 'round'; ctx.stroke(Geo.coast); }
+    if (hexPx > 6 && !lowQ) { ctx.strokeStyle = 'rgba(110,160,190,0.16)'; ctx.lineWidth = Math.max(5 / px, HW * 0.45); ctx.lineJoin = 'round'; ctx.stroke(Geo.coast); }
     // everything below is clipped to the true shape of the land
     ctx.save();
     ctx.clip(Geo.coast);
@@ -276,6 +304,11 @@ window.IM = window.IM || {};
       if (R.mode === 'political' && G.ctrl[p] !== G.owner[W.stateOf[p]]) occupied.push(i);
     }
     for (const [col, path] of groups) { ctx.fillStyle = col; ctx.fill(path); if (!low) { ctx.strokeStyle = col; ctx.lineWidth = 0.6 / px; ctx.stroke(path); } }
+    // relief: soft hillshade, slopes facing the north-west light brighter, the rest in shadow
+    if (Geo.relief && R.quality !== 'low') {
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(Geo.relief, 0, RH * 0.5, R.worldW, W.rows * RH);
+    }
     // occupied territory: owner colour stripes over the occupier colour
     if (occupied.length) {
       const og = new Map();
@@ -288,6 +321,16 @@ window.IM = window.IM || {};
       }
       ctx.restore();
     }
+    // lakes and rivers
+    ctx.fillStyle = '#1a3042'; ctx.fill(Geo.lakes);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(14,22,30,0.9)'; ctx.lineWidth = Math.max(0.8 / px, HW * 0.04); ctx.stroke(Geo.lakes);
+    ctx.strokeStyle = 'rgba(92,150,196,0.95)';
+    if (hexPx > 3) { ctx.lineWidth = Math.max(1.5 / px, HW * 0.09); ctx.stroke(Geo.rivers[1]); }
+    if (hexPx > (lowQ ? 14 : 7)) { ctx.lineWidth = Math.max(1.1 / px, HW * 0.06); ctx.stroke(Geo.rivers[2]); }
+    if (hexPx > 15 && !lowQ) { ctx.lineWidth = Math.max(0.8 / px, HW * 0.04); ctx.stroke(Geo.rivers[3]); }
+    // peaks and hills when zoomed in
+    if (hexPx > 15 && !lowQ) drawRelief(cells, proxy, hexPx, px);
     // nation-selection highlight: dim everyone else
     const F = R.focusOwner ?? -1;
     if (F >= 0) {
@@ -332,6 +375,32 @@ window.IM = window.IM || {};
     ctx.restore();
   }
 
+  function drawRelief(cells, proxy, hexPx, px) {
+    const dark = new Path2D(), light = new Path2D(), snow = new Path2D(), hills = new Path2D();
+    const rnd = (i, k) => ((Math.imul(i, 2654435761) ^ Math.imul(k + 1, 40503)) >>> 0) / 4294967296;
+    for (const i of cells) {
+      const h = proxy[i]; if (h !== i && !(i >= W.n && W.region[h])) continue;
+      const t = W.terrainName(h);
+      const x = i >= W.n ? IM.Geo.cells[i][0] : R.cx[h], y = i >= W.n ? IM.Geo.cells[i][1] + S : R.cy[h];
+      if (t === 'mountain') {
+        for (let k = 0; k < 2; k++) {
+          const px0 = x + (rnd(h, k) - 0.5) * S * 0.9 + (k ? S * 0.25 : -S * 0.25), py0 = y + (rnd(h, k + 5) - 0.3) * S * 0.5;
+          const w = S * (0.45 + rnd(h, k + 9) * 0.2), ht = w * 1.05;
+          dark.moveTo(px0 - w / 2, py0); dark.lineTo(px0, py0 - ht); dark.lineTo(px0 + w / 2, py0); dark.closePath();
+          light.moveTo(px0 - w / 2, py0); light.lineTo(px0, py0 - ht); light.lineTo(px0 - w * 0.08, py0); light.closePath();
+          if (IM.Geo.height[h] > 0.75) { snow.moveTo(px0 - w * 0.13, py0 - ht * 0.72); snow.lineTo(px0, py0 - ht); snow.lineTo(px0 + w * 0.13, py0 - ht * 0.72); snow.closePath(); }
+        }
+      } else if (t === 'hills' && hexPx > 22) {
+        const hx = x + (rnd(h, 3) - 0.5) * S * 0.6, hy = y + S * 0.2;
+        hills.moveTo(hx - S * 0.35, hy); hills.quadraticCurveTo(hx, hy - S * 0.4, hx + S * 0.35, hy);
+      }
+    }
+    ctx.fillStyle = 'rgba(30,20,10,0.2)'; ctx.fill(dark);
+    ctx.fillStyle = 'rgba(255,250,235,0.16)'; ctx.fill(light);
+    ctx.fillStyle = 'rgba(250,250,255,0.55)'; ctx.fill(snow);
+    ctx.strokeStyle = 'rgba(30,20,10,0.25)'; ctx.lineWidth = Math.max(0.8 / px, HW * 0.03); ctx.stroke(hills);
+  }
+
   function drawLayer(G, off, x0, y0, vw, vh) {
     const px = cam.z; // screen pixels per world pixel
     const hexPx = HW * px;
@@ -363,6 +432,7 @@ window.IM = window.IM || {};
       }
     }
     drawCamps(G, hexPx, px);
+    if (R.mode === 'supply' && G.player !== null) drawHubs(G, vis, px);
     drawCities(G, vis, hexPx, px);
     drawLabels(G, x0, y0, vw, vh, hexPx, px);
     if (R.showUnits !== false) {
@@ -371,6 +441,39 @@ window.IM = window.IM || {};
       drawBattles(G, px, hexPx);
     }
     drawNukes(G, px);
+    drawMarks(px);
+  }
+
+  // objective markers (tutorial): a gold ring, pulsing while the player is asked to look for it
+  function drawMarks(px) {
+    if (!R.marks) return;
+    const t = performance.now() / 1000;
+    for (const m of R.marks) {
+      const x = R.cx[m.hex], y = R.cy[m.hex], r = Math.max(9 / px, S * 1.6);
+      ctx.lineWidth = Math.max(2 / px, S * 0.18); ctx.strokeStyle = 'rgba(242,210,125,0.95)';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
+      if (m.pulse) {
+        const u = (t % 1.4) / 1.4;
+        ctx.strokeStyle = `rgba(242,210,125,${1 - u})`; ctx.beginPath(); ctx.arc(x, y, r * (1 + u * 1.6), 0, 7); ctx.stroke();
+      }
+      const fs = Math.max(11 / px, S * 0.9);
+      ctx.font = `700 ${fs}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.lineWidth = fs * 0.25; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.fillStyle = '#f2d27d';
+      const label = `★ ${m.label}`;
+      ctx.strokeText(label, x, y - r - 2 / px); ctx.fillText(label, x, y - r - 2 / px);
+    }
+  }
+
+  // Supply hubs of the player: victory-point cities they hold
+  function drawHubs(G, vis, px) {
+    ctx.strokeStyle = '#e8f5d0'; ctx.fillStyle = 'rgba(30,60,30,0.85)';
+    for (const s of W.states) {
+      const h = s.cityHex;
+      if (s.vp < 3 || G.ctrl[h] !== G.player || !inView(h, vis)) continue;
+      const r = Math.max(3.5 / px, S * 0.45);
+      ctx.lineWidth = Math.max(1.4 / px, r * 0.22);
+      ctx.beginPath(); ctx.arc(R.cx[h], R.cy[h], r, 0, 7); ctx.fill(); ctx.stroke();
+    }
   }
 
   // Field camps of a military buildup: clusters of tents that grow with each report.

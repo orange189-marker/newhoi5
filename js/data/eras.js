@@ -203,7 +203,7 @@ window.IM = window.IM || {};
     },
     // ================================================================ 1991
     {
-      id: '1991', intro: 'desert_storm', title: 'Desert Storm & the Fall of the Union', start: [1991, 1, 17], techYear: 1990, tension: 30, modern: true,
+      id: '1991', intro: 'desert_storm', introFor: { DEU: 'berlin_wall', POL: 'berlin_wall', CZS: 'berlin_wall', HUN: 'berlin_wall', ROU: 'berlin_wall', BGR: 'berlin_wall', SOV: 'berlin_wall' }, title: 'Desert Storm & the Fall of the Union', start: [1991, 1, 17], techYear: 1990, tension: 30, modern: true,
       blurb: 'January 1991. A US-led coalition opens the air war against Iraq over Kuwait. In Moscow, the Soviet Union is coming apart at the seams. Yugoslavia teeters.',
       owner: {
         ...all('SOV', SOVIET_REGIONS), ...all('YUG', YUGO), ...all('CZS', ['CZE', 'SVK']), KWT: 'IRQ', ERI: 'ETH',

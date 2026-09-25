@@ -15,6 +15,10 @@ python3 -m http.server 8080   # or: npm run serve
 # then open http://localhost:8080
 ```
 
+New to grand strategy? Pick **Tutorial: Defend Kyiv** on the main menu: a guided first mission that teaches the controls step by step, then asks you to hold Kyiv until 1 April 2022.
+
+The game works on phones and tablets too: the side bar becomes a bottom dock, and selected divisions get a Move / Halt bar. **Game menu → Graphics** switches between High, Low (faster) and Auto, which picks by device and drops to Low by itself if the map redraws slowly.
+
 ### Controls
 
 | Action | Input |
@@ -22,9 +26,9 @@ python3 -m http.server 8080   # or: npm run serve
 | Pause / resume | `Space` |
 | Game speed | `1`–`5`, or `+` / `-` |
 | Pan the map | drag, `W A S D`, arrow keys |
-| Zoom | mouse wheel (pinch on touch screens) |
+| Zoom | mouse wheel; pinch or double-tap on touch screens |
 | Select divisions | left-click a stack, `Shift`-drag to box-select, `Ctrl`+click for everything on screen |
-| Move / attack | right-click a hex (long-press on touch screens) |
+| Move / attack | right-click a hex; on touch screens tap **Move** then the target, or long-press it |
 | Halt selected divisions | `Delete` / `Backspace` |
 | Inspect a state | left-click land with none of your units on it |
 | Panels | `F` focus · `R` research · `P` politics · `E` diplomacy · `Q` production · `B` construction · `T` recruit · `G` army |
@@ -73,10 +77,13 @@ Each era has its own borders, colonial empires, factions (Allies, Axis, Cominter
 - **AI generals** — delegate any group of divisions (or the whole army) to the AI.
 - **Attack-odds preview** — hover an enemy stack with divisions selected.
 - **News panel** — world events appear on half the screen as a 1939-era broadsheet (The Evening Dispatch) or, from 1991 on, a live TV news bulletin, with a map of the action. Choose All news, Major only or Off.
-- **Super events** — full-screen moments for turning points (the invasion of Poland, Barbarossa, Pearl Harbor, Trinity, Desert Storm, the fall of the USSR, 9/11, the 2022 invasion of Ukraine, a Taiwan war, any nuclear strike, the fall of a great capital) with an animated map of the offensive, a historical quote, a nation-specific account and synthesized sound.
+- **Super events** — full-screen moments for turning points (the invasion of Poland, Barbarossa, Pearl Harbor, Operation Uranus at Stalingrad, D-Day, Trinity, the fall of the Berlin Wall, Desert Storm, the fall of the USSR, 9/11, the 2022 invasion of Ukraine, the Kerch bridge explosion, the Kursk incursion, a Taiwan war, any nuclear strike, the fall of a great capital) with an animated map of the offensive, a historical quote, a nation-specific account and synthesized sound. Many change the war: Uranus traps the Axis armies around Stalingrad, D-Day lands an Allied army in Normandy, the burning bridge starves Russia's southern front of supply.
+- **Alternate history** — when the world leaves the historical path (a capital that never fell does, a nation makes the choice history did not, Stalingrad is in German hands by November 1942), the news runs it under an "Alternate history" banner with a note on what happened in our timeline.
+- More historical news: Dunkirk, the counteroffensive before Moscow, the sinking of the Moskva, the Kharkiv counteroffensive, strikes on Ukraine's power grid and the withdrawal from Kherson, each with real effects and each checked against the state of the war.
 - **The road to war (2021 era)** — from July 2021 a timeline of everyday news (the Euros, a record harvest, Christmas markets) is slowly overtaken by the buildup: Zapad-2021, satellite images of camps, US warnings, a cyberattack, troops in Belarus, evacuations. Field camps grow on the map, Russian divisions really move to the border, and a **Border Watch** gauge tracks the intelligence estimate. Ukraine and Russia get decisions along the way.
 - **The invasion super event** opens on a black screen with the clock ticking to 05:00, then missile strikes streak across the map, impacts shake the screen, columns advance and a live feed of the first day scrolls in.
-- **Realistic map** — provinces are organic, irregular shapes instead of hexagons, and every country is clipped to its real Natural Earth coastline, so Italy, Greece, Japan or Crimea look like themselves. (The game logic still runs on a hidden hex grid.)
+- **Realistic map** — provinces are organic, irregular shapes instead of hexagons, and every country is clipped to its real Natural Earth coastline, so Italy, Greece, Japan or Crimea look like themselves. (The game logic still runs on a hidden hex grid.) Rivers, lakes and soft hill shading are drawn under the borders, with peaks in the mountains when you zoom in.
+- **Supply map mode** — see how far supply reaches from your hubs, where it is stretched thin and where troops are cut off.
 - Real flags for every nation, with period-correct flags for historical states (Soviet Union, Manchukuo, Vichy France, Free France, the British Raj, pre-1965 Canada, Ichkeria and more).
 - A nation-selection screen with briefings, difficulty ratings and strength comparisons for each era's powers.
 - Saving and loading (stored in your browser).
@@ -90,7 +97,7 @@ js/data/              map data (generated), cities/states, countries, eras, rule
 js/engine/            world model & pathfinding, economy, war, diplomacy, events, AI, save/load
 js/ui/                canvas renderer, map geometry (organic provinces), screens & input, management panels
 tools/build-map.js    regenerates js/data/mapdata.js from Natural Earth data
-tools/build-coast.js  regenerates js/data/coast.js (simplified real coastlines)
+tools/build-coast.js  regenerates js/data/coast.js (coastlines, rivers and lakes)
 tools/build-flags.js  regenerates js/data/flags.js (flag-icons + hand-drawn period flags)
 tools/sim-test.js     headless simulation of every era (smoke/balance test)
 ```
@@ -101,7 +108,7 @@ tools/sim-test.js     headless simulation of every era (smoke/balance test)
 npm install        # only needed for the tools
 npm test           # simulate every era for 90 days headlessly: node tools/sim-test.js [days] [era]
 npm run build-map  # rebuild the hex map from Natural Earth (world-atlas)
-npm run build-coast # rebuild the coastlines the map is clipped to
+npm run build-coast # rebuild coastlines, rivers and lakes (downloads Natural Earth rivers/lakes once)
 npm run build-flags # rebuild the flag images (needs Playwright's Chromium)
 ```
 

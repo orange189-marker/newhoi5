@@ -62,9 +62,18 @@ window.IM = window.IM || {};
     root.appendChild(els.sel);
     els.panel = h('div', { class: 'panel', style: { display: 'none' } });
     root.appendChild(els.panel);
-    const modes = [['political', 'Political'], ['diplomatic', 'Diplomatic'], ['ideology', 'Ideology'], ['terrain', 'Terrain']];
-    els.modes = h('div', { class: 'mapmodes' }, modes.map(([m, l]) => h('button', { class: 'btn' + (R.mode === m ? ' active' : ''), onclick: e => { R.mode = m; R.dirty = true; [...els.modes.children].forEach(b => b.classList.remove('active')); e.target.classList.add('active'); } }, l)));
+    const modes = [['political', 'Political'], ['diplomatic', 'Diplomatic'], ['ideology', 'Ideology'], ['terrain', 'Terrain'], ['supply', 'Supply']];
+    els.modes = h('div', { class: 'mapmodes' }, modes.map(([m, l]) => h('button', { class: 'btn' + (R.mode === m ? ' active' : ''), onclick: e => { R.mode = m; R.dirty = true; [...els.modes.children].forEach(b => b.classList.remove('active')); e.target.classList.add('active'); P.legend(); } }, l)));
     root.appendChild(els.modes);
+    // touch screens: an action bar for selected divisions (no right mouse button)
+    els.touch = h('div', { class: 'touchbar', style: { display: 'none' } },
+      els.moveBtn = h('button', { class: 'btn', onclick: () => { UI.moveMode = !UI.moveMode; P.touchBar(); } }, '➜ Move'),
+      h('button', { class: 'btn', onclick: () => { const g = G(); IM.War.stop(g, g.divisions.filter(d => R.selected.has(d.id))); R.dirty = true; } }, '■ Halt'),
+      h('button', { class: 'btn', onclick: () => { R.selected.clear(); UI.moveMode = false; P.selectionChanged(); R.dirty = true; } }, '✕ Done'));
+    root.appendChild(els.touch);
+    els.legend = h('div', { class: 'maplegend', style: { display: 'none' } });
+    root.appendChild(els.legend);
+    P.legend();
     els.ticker = h('div', { class: 'ticker' });
     root.appendChild(els.ticker);
     hoverEl = h('div', { class: 'tooltip', style: { display: 'none' } });
@@ -72,11 +81,20 @@ window.IM = window.IM || {};
     P.refresh(true);
   };
 
+  // a small key for map modes that need one
+  P.legend = function () {
+    if (!els.legend) return;
+    const rows = R.mode === 'supply' ? [['#3e8a4c', 'Full supply'], ['#a39a3a', 'Stretched'], ['#b8742e', 'Thin'], ['#b8322e', 'Cut off'], ['#6b3a36', 'Enemy'], ['ring', 'Supply hub']] : null;
+    els.legend.style.display = rows ? '' : 'none';
+    els.legend.innerHTML = '';
+    if (rows) els.legend.appendChild(h('div', null, h('b', null, 'Supply'), rows.map(([c, l]) => h('div', { class: 'lg' }, h('i', { class: c === 'ring' ? 'ring' : '', style: c === 'ring' ? null : { background: c } }), l))));
+  };
+
   P.toast = function (n) {
     if (!els.ticker) return;
     const t = h('div', { class: 'toast ' + (n.kind || '') }, n.text);
     els.ticker.appendChild(t);
-    while (els.ticker.children.length > 5) els.ticker.firstChild.remove();
+    while (els.ticker.children.length > (window.innerWidth < 760 || window.innerHeight < 480 ? 2 : 5)) els.ticker.firstChild.remove();
     setTimeout(() => t.remove(), n.kind === 'major' || n.kind === 'nuke' ? 9000 : 6000);
   };
 
@@ -211,7 +229,15 @@ window.IM = window.IM || {};
   }
 
   // ------------------------------------------------------------------ selection panel
-  P.selectionChanged = function () { renderSel(); };
+  P.selectionChanged = function () { renderSel(); P.touchBar(); };
+  P.touchBar = function () {
+    if (!els.touch) return;
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (!R.selected.size) UI.moveMode = false;
+    els.touch.style.display = coarse && R.selected.size ? '' : 'none';
+    els.moveBtn.classList.toggle('primary', !!UI.moveMode);
+    els.moveBtn.textContent = UI.moveMode ? '➜ Tap the target' : '➜ Move';
+  };
   function renderSel() {
     const g = G();
     if (!els.sel) return;
@@ -228,7 +254,7 @@ window.IM = window.IM || {};
     els.sel.innerHTML = '';
     els.sel.style.display = 'block';
     els.sel.appendChild(h('div', { class: 'row' }, h('h3', { class: 'grow' }, `${divs.length} division${divs.length > 1 ? 's' : ''} selected`), h('button', { class: 'x', onclick: () => { R.selected.clear(); renderSel(); R.dirty = true; } }, '×')));
-    els.sel.appendChild(h('div', { class: 'muted small', style: { margin: '2px 0 8px' } }, 'Right-click the map to move. Moving onto enemy troops attacks them.'));
+    els.sel.appendChild(h('div', { class: 'muted small', style: { margin: '2px 0 8px' } }, (window.matchMedia && window.matchMedia('(pointer: coarse)').matches ? 'Tap Move, then the target (or long-press it).' : 'Right-click the map to move.') + ' Moving onto enemy troops attacks them.'));
     els.sel.appendChild(h('div', { class: 'row', style: { marginBottom: '8px', flexWrap: 'wrap' } },
       h('button', { class: 'btn small', onclick: () => { IM.War.stop(g, divs); for (const d of divs) d.auto = false; R.dirty = true; renderSel(); } }, 'Halt'),
       h('button', { class: 'btn small' + (auto ? ' active' : ''), onclick: () => { for (const d of divs) d.auto = !auto; if (!auto) IM.War.stop(g, divs.filter(d => d.battle < 0)); renderSel(); } }, auto ? 'AI general in command' : 'Delegate to AI general'),
@@ -577,6 +603,9 @@ window.IM = window.IM || {};
     const bg = UI.modal('Game Menu', h('div', { class: 'menu', style: { width: '100%' } },
       h('button', { class: 'btn', onclick: () => { const e = IM.Save.store(g); P.toast({ text: e || 'Game saved.', kind: e ? 'bad' : 'good' }); bg.remove(); } }, 'Save game'),
       h('button', { class: 'btn', onclick: () => { bg.remove(); UI.showHelp(); } }, 'How to play'),
+      h('label', { class: 'row', style: { justifyContent: 'space-between', gap: '10px' } }, h('span', null, 'Graphics'),
+        h('select', { id: 'gfx', onchange: e => { R.setQuality(e.target.value); R.dirty = true; } },
+          [['auto', `Auto (${R.quality === 'low' ? 'Low' : 'High'})`], ['high', 'High'], ['low', 'Low — faster']].map(([v, l]) => h('option', { value: v, selected: R.qualityPref === v }, l)))),
       h('button', { class: 'btn danger', onclick: () => { bg.remove(); if (hoverEl) hoverEl.remove(); UI.showMenu(); } }, 'Quit to main menu')),
       [{ label: 'Resume' }]);
   };

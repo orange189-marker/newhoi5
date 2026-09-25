@@ -234,8 +234,10 @@ window.IM = window.IM || {};
       if (!(seen[key] > G.hour - 24 * 90) && (IM.Game.notable(G, ownerId) || IM.Game.notable(G, to))) {
         seen[key] = G.hour;
         const big = s.vp >= 15 || ownerId === G.player;
+        const hist = IM.historyOfFall ? IM.historyOfFall(G, s, nc, owner) : null;
+        if (hist) { G.flags = G.flags || {}; G.flags.divergences = (G.flags.divergences || 0) + 1; }
         IM.Game.headline(G, {
-          type: big ? 'super' : 'news', tags: [nc.tag, owner.tag], major: true,
+          type: big ? 'super' : 'news', tags: [nc.tag, owner.tag], major: true, alt: !!hist, history: hist,
           title: big ? `The Fall of ${s.name}` : `${s.name.toUpperCase()} FALLS`,
           text: `${nc.name} troops have entered ${s.name}, the capital of ${owner.name}. ${owner.capitulated ? '' : `The government of ${owner.name} vows to fight on from the provinces.`} Across the world, the news is read as a turning point in the war.`,
           art: { kind: 'map', focus: s.name, span: 18, red: [nc.tag], blue: [owner.tag], mark: s.name },
@@ -484,44 +486,46 @@ window.IM = window.IM || {};
   // captured cities as weaker hubs) through friendly land. The further a unit
   // is from a hub, the thinner its supply; cut off units starve.
   War.SUPPLY_RANGE = 10;
+  // Distance (in hexes, 255 = cut off) from each hex to the nearest supply hub of country cid.
+  War.supplyDepth = function (G, cid) {
+    const W = G.W;
+    War.relation(G, 0, 0);
+    const R = G.rel, N = G.relN, MAXD = 40;
+    const c = G.countries[cid], RB = cid * N;
+    const depth = new Uint8Array(W.n).fill(255);
+    const buckets = Array.from({ length: MAXD + 1 }, () => []);
+    const seed = (h, d) => { if (d < depth[h]) { depth[h] = d; buckets[d].push(h); } };
+    for (const s of W.states) {
+      const h = s.cityHex, o = G.ctrl[h];
+      if (o < 0 || R[RB + o] !== 1) continue;
+      const owned = G.owner[s.id] === o || War.isFriend(G, G.owner[s.id], o);
+      if (owned) seed(h, s.vp >= 3 ? 0 : 3);
+      else if (s.coastal && c.stock.nav > 0 && s.vp >= 3) seed(h, 2);
+      else if (s.vp >= 5) seed(h, 6);
+      else seed(h, 9);
+    }
+    for (let d = 0; d < MAXD; d++) {
+      const b = buckets[d];
+      for (let i = 0; i < b.length; i++) {
+        const h = b[i];
+        if (depth[h] !== d) continue;
+        for (let k = 0; k < 6; k++) {
+          const j = W.nb[h * 6 + k];
+          if (j < 0 || !W.region[j] || depth[j] <= d + 1) continue;
+          const o = G.ctrl[j];
+          if (o < 0 || R[RB + o] !== 1) continue;
+          depth[j] = d + 1; buckets[d + 1].push(j);
+        }
+      }
+    }
+    return depth;
+  };
   War.computeSupply = function (G) {
     const W = G.W;
     const activeOwners = new Set();
     for (const d of G.divisions) if (War.atWar(G, d.owner) || G.ctrl[d.hex] !== d.owner) activeOwners.add(d.owner);
-    War.relation(G, 0, 0);
-    const R = G.rel, N = G.relN;
-    const MAXD = 40;
     const cache = new Map();
-    for (const cid of activeOwners) {
-      const c = G.countries[cid], RB = cid * N;
-      const depth = new Uint8Array(W.n).fill(255);
-      const buckets = Array.from({ length: MAXD + 1 }, () => []);
-      const seed = (h, d) => { if (d < depth[h]) { depth[h] = d; buckets[d].push(h); } };
-      for (const s of W.states) {
-        const h = s.cityHex, o = G.ctrl[h];
-        if (o < 0 || R[RB + o] !== 1) continue;
-        const owned = G.owner[s.id] === o || War.isFriend(G, G.owner[s.id], o);
-        if (owned) seed(h, s.vp >= 3 ? 0 : 3);
-        else if (s.coastal && c.stock.nav > 0 && s.vp >= 3) seed(h, 2);
-        else if (s.vp >= 5) seed(h, 6);
-        else seed(h, 9);
-      }
-      for (let d = 0; d < MAXD; d++) {
-        const b = buckets[d];
-        for (let i = 0; i < b.length; i++) {
-          const h = b[i];
-          if (depth[h] !== d) continue;
-          for (let k = 0; k < 6; k++) {
-            const j = W.nb[h * 6 + k];
-            if (j < 0 || !W.region[j] || depth[j] <= d + 1) continue;
-            const o = G.ctrl[j];
-            if (o < 0 || R[RB + o] !== 1) continue;
-            depth[j] = d + 1; buckets[d + 1].push(j);
-          }
-        }
-      }
-      cache.set(cid, depth);
-    }
+    for (const cid of activeOwners) cache.set(cid, War.supplyDepth(G, cid));
     for (const d of G.divisions) {
       if (!W.region[d.hex]) { d.supplied = true; d.supply = 0.8; continue; }
       const dep = cache.get(d.owner);
@@ -529,6 +533,11 @@ window.IM = window.IM || {};
       const x = dep[d.hex];
       d.supplied = x !== 255;
       d.supply = x === 255 ? 0 : x <= War.SUPPLY_RANGE ? 1 : Math.max(0.35, 1 - (x - War.SUPPLY_RANGE) * 0.05);
+    }
+    // the Kerch bridge is down: Russian troops in the south run short
+    if (G.flags && G.flags.kerchUntil > G.hour) {
+      const south = ['Simferopol', 'Kherson', 'Zaporizhzhia'].map(n => W.stateByName[n] && W.stateByName[n].id);
+      for (const d of G.divisions) if (d.owner === G.tagId.RUS && W.region[d.hex] && south.includes(W.stateOf[d.hex])) d.supply = Math.min(d.supply, 0.55);
     }
     G.supplyDirty = false;
   };

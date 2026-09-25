@@ -335,3 +335,95 @@ kbd { background: #2b353b; border: 1px solid var(--line-2); border-bottom-width:
 .sf-item b { color: #ff6b4a; font-family: ui-monospace, Menlo, monospace; }
 @keyframes feedIn { from { opacity: 0; transform: translateX(12px); background: rgba(255,90,60,0.25); } }
 @media (max-width: 800px) { .sup-feed { display: none; } }
+
+/* alternate history */
+.np-alt { align-self: center; font: 800 11px var(--font); letter-spacing: 0.22em; text-transform: uppercase; color: #fff; background: linear-gradient(90deg, #6b3fa0, #3b2a8a); padding: 4px 12px; border-radius: 2px; }
+.newsp.ww2 .np-alt { background: #3a2415; color: #efe4c9; font-family: Georgia, serif; }
+.np-hist { margin: 0; padding: 8px 12px; font-size: 13.5px; line-height: 1.5; border-left: 3px solid #7c5cc4; background: rgba(124,92,196,0.1); }
+.newsp.ww2 .np-hist { border-left-color: #3a2415; background: rgba(58,36,21,0.08); font-family: Georgia, serif; }
+.sup-hist { margin: 12px 0 0; max-width: 760px; font-size: 14px; line-height: 1.5; color: #d9cfe8; border-left: 3px solid #7c5cc4; padding: 4px 12px; }
+
+/* map legend */
+.maplegend { position: absolute; left: 70px; bottom: 60px; background: rgba(14,20,26,0.92); border: 1px solid #2c3a44; border-radius: 6px; padding: 8px 12px; font-size: 12px; pointer-events: none; z-index: 5; }
+.maplegend b { display: block; margin-bottom: 4px; color: #e7c96b; letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px; }
+.maplegend .lg { display: flex; align-items: center; gap: 8px; line-height: 1.7; }
+.maplegend i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
+.maplegend i.ring { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #e8f5d0; background: #1e3c1e; }
+
+/* tutorial */
+.coach { position: absolute; top: 58px; left: 66px; width: min(360px, calc(100vw - 84px)); background: linear-gradient(#1c252c, #141b20); border: 1px solid var(--gold); border-radius: 6px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); z-index: 30; animation: coach-in 0.35s ease-out; }
+.coach.done { opacity: 0.4; }
+.coach-n { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.coach h3 { margin: 4px 0 6px; font: 700 19px var(--serif); color: #f3e6c8; }
+.coach p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.5; color: #d7dde1; }
+.coach-wait { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.coach-wait i { width: 8px; height: 8px; border-radius: 50%; background: var(--gold); animation: pulse 1.2s infinite; }
+.coach-b { display: flex; gap: 8px; justify-content: flex-end; }
+@keyframes coach-in { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+.tut-glow { box-shadow: 0 0 0 2px var(--gold), 0 0 16px 4px rgba(242,210,125,0.7) !important; animation: tut-glow 1.2s ease-in-out infinite; }
+@keyframes tut-glow { 50% { box-shadow: 0 0 0 2px var(--gold), 0 0 4px 1px rgba(242,210,125,0.3); } }
+.tut-obj { position: absolute; top: 52px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 5px 14px; background: rgba(14,20,26,0.92); border: 1px solid #3a4852; border-radius: 16px; font-size: 13px; z-index: 6; pointer-events: none; white-space: nowrap; }
+.tut-obj .lbl { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.tut-obj b { color: #f3e6c8; }
+.tut-obj .ok { color: #7fd18b; } .tut-obj .bad { color: var(--red); }
+
+/* touch screens */
+#map { touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+html, body { overscroll-behavior: none; }
+.touchbar { position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); display: flex; gap: 6px; padding: 5px; background: var(--panel); border: 1px solid var(--gold); border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.6); z-index: 8; }
+.touchbar .btn { min-height: 40px; padding: 0 14px; font-size: 14px; }
+@media (pointer: coarse) {
+  .btn { min-height: 38px; }
+  .sidebtn { width: 50px; height: 50px; }
+  .spd { min-width: 18px; min-height: 26px; }
+}
+
+/* phones */
+@media (max-width: 760px) {
+  .topbar { height: 44px; }
+  .topbar .me .nm { display: none; }
+  .stat { padding: 0 8px; }
+  .stat .l { font-size: 8.5px; }
+  .clock { padding: 0 4px; }
+  .clock .date { min-width: 0; font-size: 12px; }
+  .sidebar { top: auto; bottom: 0; left: 0; right: 0; flex-direction: row; gap: 2px; padding: 4px calc(4px + env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) calc(4px + env(safe-area-inset-left)); overflow-x: auto; background: linear-gradient(#1c252c, #12181c); border-top: 1px solid #000; z-index: 7; scrollbar-width: none; }
+  .sidebtn { flex: 1 0 44px; width: auto; height: 46px; }
+  .mapmodes { left: 50%; transform: translateX(-50%); bottom: 62px; max-width: calc(100vw - 16px); overflow-x: auto; scrollbar-width: none; }
+  .mapmodes .btn { padding: 4px 8px; font-size: 12px; }
+  .touchbar { bottom: 108px; }
+  .panel { top: 50px; left: 4px; right: 4px; width: auto; bottom: 62px; }
+  .selpanel { left: 4px; right: 4px; width: auto; bottom: 108px; max-height: 38vh; }
+  .ticker { bottom: 108px; left: 8px; right: 8px; width: auto; }
+  .maplegend { left: 8px; bottom: 108px; }
+  .coach { top: 86px; left: 8px; width: calc(100vw - 16px); }
+  .tut-obj { top: 50px; }
+  .modal { width: calc(100vw - 16px) !important; }
+}
+@media (max-height: 480px) and (max-width: 1000px) {
+  .sidebar { top: 50px; bottom: auto; left: 4px; right: auto; flex-direction: column; overflow-y: auto; max-height: calc(100vh - 56px); background: none; border: 0; padding: 0; }
+  .sidebtn { flex: 0 0 auto; width: 40px; height: 40px; font-size: 15px; }
+  .sidebtn span { display: none; }
+  .mapmodes { bottom: 6px; }
+  .touchbar { bottom: 52px; }
+  .panel, .selpanel { left: 50px; bottom: 52px; }
+  .coach { top: 50px; left: 50px; width: min(360px, calc(100vw - 60px)); }
+}
+.coach.mini { padding: 6px 12px; opacity: 0.92; }
+.coach.mini p, .coach.mini .coach-wait, .coach.mini .coach-b, .coach.mini .coach-n { display: none; }
+.coach.mini h3 { margin: 0; font-size: 15px; }
+@media (max-width: 760px) {
+  .ticker { bottom: 168px; }
+  .toast { font-size: 12px; padding: 5px 9px; }
+  .coach p { font-size: 13px; }
+}
+@media (max-height: 480px) and (max-width: 1000px) {
+  .ticker { left: auto; right: 8px; width: min(300px, 40vw); bottom: 52px; }
+  .tut-obj { left: auto; right: 8px; transform: none; top: 50px; }
+  .coach { width: min(300px, 38vw); }
+  .coach p { font-size: 12.5px; margin-bottom: 6px; }
+}
+@media (max-height: 480px) and (max-width: 1000px) {
+  .selpanel { left: auto; right: 8px; bottom: 52px; width: min(300px, 38vw); max-height: 38vh; padding: 6px 10px; }
+  .ticker { top: 92px; bottom: auto; flex-direction: column; }
+  .mapmodes .btn { padding: 3px 7px; font-size: 12px; }
+}

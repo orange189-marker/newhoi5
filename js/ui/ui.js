@@ -75,6 +75,7 @@ window.IM = window.IM || {};
 
   UI.showMenu = function () {
     UI.screen = 'menu'; UI.paused = true;
+    if (IM.Tutorial) IM.Tutorial.detach();
     if (IM.News) IM.News.reset();
     backdrop('1939');
     R.centerOn(R.hexAtIndex ? 0 : IM.world.hexAt(20, 45), canvas.clientHeight / R.worldH * 2.2);
@@ -85,6 +86,7 @@ window.IM = window.IM || {};
       h('div', { class: 'subtitle' }, 'Grand strategy across eight eras · 1939 – 2026'),
       h('div', { class: 'menu' },
         h('button', { class: 'btn primary', onclick: UI.showEras }, 'New Campaign'),
+        h('button', { class: 'btn', onclick: () => IM.Tutorial.start() }, 'Tutorial: Defend Kyiv'),
         h('button', { class: 'btn', disabled: !saves.length, onclick: UI.showLoad }, 'Load Game'),
         h('button', { class: 'btn', onclick: () => UI.showHelp(UI.showMenu) }, 'How to Play'),
       ),
@@ -242,9 +244,12 @@ window.IM = window.IM || {};
     R.centerOn(G.W.states[c.capital].cityHex, 2.2);
     IM.Panels.buildHUD();
     R.showUnits = true;
-    IM.Game.news(G, `You lead ${c.name}. The game is paused — press Space to begin.`, 'major');
-    setTimeout(() => IM.Panels.toast({ text: 'Tip: select divisions and right-click to move. Army → "Delegate all" hands your fronts to an AI general.', kind: 'info' }), 400);
-    if (isNew && G.era.intro) IM.Game.headline(G, { type: 'super', key: G.era.intro });
+    IM.Game.news(G, `You lead ${c.name}. The game is paused — press ${window.matchMedia && window.matchMedia('(pointer: coarse)').matches ? '▶' : 'Space'} to begin.`, 'major');
+    const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (!G.flags || !G.flags.tutorial) setTimeout(() => IM.Panels.toast({ text: coarse ? 'Tip: tap a division, then Move and tap the target (or long-press). Army → "Delegate all" hands your fronts to an AI general.' : 'Tip: select divisions and right-click to move. Army → "Delegate all" hands your fronts to an AI general.', kind: 'info' }), 400);
+    IM.Tutorial.attach(G);
+    const intro = (G.era.introFor && G.era.introFor[c.tag]) || G.era.intro;
+    if (isNew && intro) IM.Game.headline(G, { type: 'super', key: intro });
   }
 
   UI.showLoad = function () {
@@ -271,6 +276,7 @@ window.IM = window.IM || {};
         h('li', null, 'Drag or ', h('kbd', null, 'W A S D'), ' / arrow keys to pan, mouse wheel to zoom'),
         h('li', null, 'Left-click your units to select them, ', h('kbd', null, 'Shift'), '-drag to box-select, ', h('kbd', null, 'Ctrl'), '+click to select all your divisions on screen'),
         h('li', null, 'Right-click a hex to move selected divisions there. Moving into enemy divisions starts a battle.'),
+        h('li', null, 'Touch screens: tap to select, then tap ', h('b', null, 'Move'), ' and the target (or long-press it); pinch to zoom, double-tap to zoom in'),
         h('li', null, 'Left-click land to inspect a state: build factories and forts there, or open diplomacy with its owner'),
         h('li', null, h('kbd', null, 'F'), ' focus · ', h('kbd', null, 'R'), ' research · ', h('kbd', null, 'P'), ' politics · ', h('kbd', null, 'E'), ' diplomacy · ', h('kbd', null, 'Q'), ' production · ', h('kbd', null, 'B'), ' construction · ', h('kbd', null, 'T'), ' recruit · ', h('kbd', null, 'G'), ' army · ', h('kbd', null, 'Esc'), ' close / deselect'),
       ),
@@ -291,6 +297,9 @@ window.IM = window.IM || {};
         h('li', null, h('b', null, 'Nuclear weapons'), ' — research the bomb, build warheads, strike enemy territory... and face retaliation.'),
         h('li', null, h('b', null, 'Negotiated peace'), ' — offer white peace or demand concessions instead of fighting to the bitter end.'),
         h('li', null, h('b', null, 'Lend-lease'), ' — arm your friends without joining their war.'),
+        h('li', null, h('b', null, 'Alternate history'), ' — when events take a different turn (a capital that never fell, a decision history did not make), the news flags it and tells you what really happened.'),
+        h('li', null, h('b', null, 'Supply map'), ' — the Supply map mode shows how far your supply reaches and where your troops are cut off.'),
+        h('li', null, 'New to the game? Try ', h('b', null, 'Tutorial: Defend Kyiv'), ' from the main menu.'),
       ),
     );
     UI.modal('How to Play', body, [{ label: 'Close', primary: true, fn: () => { if (back) back(); } }]);
@@ -351,7 +360,9 @@ window.IM = window.IM || {};
     if (G && UI.screen === 'game') {
       IM.News.pump(G);
       if (!IM.News.busy() && G.pendingEvents.length) { UI.paused = true; IM.Panels.showEvent(G.pendingEvents.shift()); }
+      IM.Tutorial.update(G);
     }
+    if (R.marks && R.marks.some(m => m.pulse)) R.dirty = true;
     if (R.dirty && now - lastDraw > 30) { R.draw(G); R.dirty = false; lastDraw = now; }
     if (UI.screen === 'game' && now - lastUI > 250) { IM.Panels.refresh(); lastUI = now; }
     requestAnimationFrame(loop);
@@ -397,32 +408,45 @@ window.IM = window.IM || {};
       else if (d.btn === 2) onRightClick(hex, e);
     });
     canvas.addEventListener('wheel', e => { e.preventDefault(); const [x, y] = pos(e); R.zoomAt(x, y, e.deltaY < 0 ? 1.18 : 1 / 1.18); }, { passive: false });
-    // touch: one finger pans / taps, two fingers pinch
-    let touch = null;
+    // touch: one finger pans / taps, two fingers pinch-zoom and pan together,
+    // a double tap zooms in, a long press (or the Move button) gives an order
+    let touch = null, lastTap = null;
+    const rel = t => { const r = canvas.getBoundingClientRect(); return [t.clientX - r.left, t.clientY - r.top]; };
+    const startPinch = (a, b) => {
+      const [ax, ay] = rel(a), [bx, by] = rel(b), mx = (ax + bx) / 2, my = (ay + by) / 2;
+      touch = { pinch: Math.hypot(ax - bx, ay - by), z: R.cam.z, world: R.screenToWorld(mx, my) };
+    };
     canvas.addEventListener('touchstart', e => {
-      if (e.touches.length === 1) { const t = e.touches[0]; touch = { x: t.clientX, y: t.clientY, cx: R.cam.x, cy: R.cam.y, moved: false, t: performance.now() }; }
-      else if (e.touches.length === 2) { const [a, b] = e.touches; touch = { pinch: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: R.cam.z, mx: (a.clientX + b.clientX) / 2, my: (a.clientY + b.clientY) / 2 }; }
+      if (e.touches.length === 1) { const [x, y] = rel(e.touches[0]); touch = { x, y, cx: R.cam.x, cy: R.cam.y, moved: false, t: performance.now() }; }
+      else if (e.touches.length === 2) startPinch(e.touches[0], e.touches[1]);
       e.preventDefault();
     }, { passive: false });
     canvas.addEventListener('touchmove', e => {
       if (!touch) return;
       if (touch.pinch && e.touches.length === 2) {
-        const [a, b] = e.touches; const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
-        const f = (touch.z * d / touch.pinch) / R.cam.z; R.zoomAt(touch.mx, touch.my, f);
+        const [ax, ay] = rel(e.touches[0]), [bx, by] = rel(e.touches[1]);
+        const d = Math.hypot(ax - bx, ay - by), mx = (ax + bx) / 2, my = (ay + by) / 2;
+        R.cam.z = Math.max(0.3, Math.min(9, touch.z * d / touch.pinch));
+        R.cam.x = touch.world[0] - mx / R.cam.z; R.cam.y = touch.world[1] - my / R.cam.z;
+        R.clampCam(); R.dirty = true;
       } else if (!touch.pinch && e.touches.length === 1) {
-        const t = e.touches[0];
-        if (Math.abs(t.clientX - touch.x) + Math.abs(t.clientY - touch.y) > 8) touch.moved = true;
-        R.cam.x = touch.cx - (t.clientX - touch.x) / R.cam.z; R.cam.y = touch.cy - (t.clientY - touch.y) / R.cam.z; R.clampCam(); R.dirty = true;
+        const [x, y] = rel(e.touches[0]);
+        if (Math.abs(x - touch.x) + Math.abs(y - touch.y) > 10) touch.moved = true;
+        if (touch.moved) { R.cam.x = touch.cx - (x - touch.x) / R.cam.z; R.cam.y = touch.cy - (y - touch.y) / R.cam.z; R.clampCam(); R.dirty = true; }
       }
       e.preventDefault();
     }, { passive: false });
     canvas.addEventListener('touchend', e => {
       if (touch && !touch.pinch && !touch.moved) {
-        const hex = R.hexAtScreen(touch.x, touch.y);
-        const long = performance.now() - touch.t > 450;
-        if (long && R.selected.size) onRightClick(hex, {}); else onLeftClick(hex, {});
+        const hex = R.hexAtScreen(touch.x, touch.y), now = performance.now();
+        const long = now - touch.t > 450;
+        if (UI.moveMode && R.selected.size) { onRightClick(hex, {}); UI.moveMode = false; IM.Panels.touchBar(); }
+        else if (long && R.selected.size) onRightClick(hex, {});
+        else if (lastTap && now - lastTap.t < 300 && Math.abs(touch.x - lastTap.x) + Math.abs(touch.y - lastTap.y) < 30 && UI.screen === 'game') { R.zoomAt(touch.x, touch.y, 1.8); lastTap = null; }
+        else { onLeftClick(hex, {}); lastTap = { t: now, x: touch.x, y: touch.y }; }
       }
-      if (e.touches.length === 0) touch = null;
+      if (e.touches.length === 1 && touch && touch.pinch) { const [x, y] = rel(e.touches[0]); touch = { x, y, cx: R.cam.x, cy: R.cam.y, moved: true, t: 0 }; }
+      else if (e.touches.length === 0) touch = null;
     });
     window.addEventListener('keydown', onKey);
     // keyboard panning
@@ -511,6 +535,7 @@ window.IM = window.IM || {};
     const divs = G.divisions.filter(d => R.selected.has(d.id));
     for (const d of divs) d.auto = false;
     const n = IM.War.orderMove(G, divs, hex);
+    if (n) UI.orders = (UI.orders || 0) + 1;
     if (!n) IM.Panels.toast({ text: 'No route: that territory is neutral, or you lack the naval capacity to get there.', kind: 'bad' });
     R.dirty = true;
     IM.Panels.selectionChanged();

@@ -52,10 +52,12 @@ window.IM = window.IM || {};
       ww2 ? h('header', { class: 'np-mast' }, h('div', { class: 'np-rule' }, h('span', null, 'Late City Edition'), h('span', null, dateText(G, it)), h('span', null, 'One Penny')), h('div', { class: 'np-name' }, 'The Evening Dispatch'), h('div', { class: 'np-rule thin' }))
         : h('header', { class: 'np-mast' }, h('div', { class: 'np-logo' }, h('b', null, 'MNN'), h('span', null, 'Meridian News Network')), h('div', { class: 'np-breaking tone-' + (it.tone || 'alarm') }, h('span', { class: 'live' }, 'LIVE'), it.tone === 'calm' ? 'TOP STORY' : it.tone === 'warn' ? 'DEVELOPING STORY' : 'BREAKING NEWS', h('span', { class: 'np-date' }, dateText(G, it)))),
       h('div', { class: 'np-body' },
+        it.alt ? h('div', { class: 'np-alt' }, 'Alternate history') : null,
         h('h2', { class: 'np-head' }, it.title),
         art,
         flags.length ? h('div', { class: 'np-flags' }, flags) : null,
-        h('p', { class: 'np-text' }, it.text)),
+        h('p', { class: 'np-text' }, it.text),
+        it.history ? h('p', { class: 'np-hist' }, h('b', null, 'In our history: '), it.history) : null),
       h('footer', { class: 'np-foot' }, pref, more, h('button', { class: 'btn primary', onclick: () => { closeNews(); } }, 'Noted')));
     root.appendChild(newsEl);
     updateMore();
@@ -86,10 +88,10 @@ window.IM = window.IM || {};
     const S = base ? {
       title: (base.titleFor && base.titleFor[me.tag]) || base.title,
       text: (base.textFor && base.textFor[me.tag]) || base.text,
-      quote: base.quote, quoteBy: base.quoteBy, time: base.time, art: base.art,
+      quote: base.quote, quoteBy: base.quoteBy, time: base.time, art: base.art, when: base.when,
       prelude: base.prelude, feed: (base.feedFor && base.feedFor[me.tag]) || base.feed,
       tags: base.art && base.art.red ? [base.art.red[0], base.art.blue[0]] : (base.art && base.art.flags) || it.tags,
-    } : { title: it.title, text: it.text, quote: it.quote, quoteBy: it.quoteBy, art: it.art, tags: it.tags };
+    } : { title: it.title, text: it.text, quote: it.quote, quoteBy: it.quoteBy, art: it.art, tags: it.tags, alt: it.alt, history: it.history };
     const wasPaused = IM.UI.paused;
     IM.UI.paused = true;
     const root = document.getElementById('ui');
@@ -107,11 +109,12 @@ window.IM = window.IM || {};
     const close = () => { timers.forEach(clearTimeout); finishTyping(); closeSuper(); IM.UI.paused = wasPaused; if (IM.Panels) IM.Panels.refresh(true); };
     const feed = S.feed ? h('aside', { class: 'sup-feed', 'aria-label': 'Live updates' }, h('div', { class: 'sf-head' }, h('span', { class: 'live' }, 'LIVE'), 'Updates')) : null;
     const content = h('div', { class: 'sup-content', onclick: finishTyping },
-      h('div', { class: 'sup-kicker' }, dateText(G, it).toUpperCase() + (S.time ? ` · ${S.time}` : '')),
-      h('h1', { class: 'sup-title' }, S.title.split('').map((ch, i) => h('span', { style: { animationDelay: `${0.4 + i * 0.035}s` } }, ch))),
+      h('div', { class: 'sup-kicker' }, (S.alt ? 'ALTERNATE HISTORY · ' : '') + (S.when || dateText(G, it)).toUpperCase() + (S.time ? ` · ${S.time}` : '')),
+      h('h1', { class: 'sup-title' }, S.title.split('').map((ch, i) => ch === ' ' ? ' ' : h('span', { style: { animationDelay: `${0.4 + i * 0.035}s` } }, ch))),
       flags,
       S.quote ? h('blockquote', { class: 'sup-quote' }, `“${S.quote}”`, h('cite', null, '— ' + S.quoteBy)) : null,
       text,
+      S.history ? h('p', { class: 'sup-hist' }, h('b', null, 'In our history: '), S.history) : null,
       h('div', { class: 'sup-actions' }, mute, h('button', { class: 'btn primary', onclick: close }, 'Continue')));
     superEl = h('div', { class: 'super', role: 'dialog', 'aria-label': S.title }, art, h('div', { class: 'sup-shade' }), feed, content, h('div', { class: 'sup-grain' }));
     root.appendChild(superEl);
@@ -141,7 +144,7 @@ window.IM = window.IM || {};
         anim = requestAnimationFrame(loop);
       };
       loop();
-      if (!N.muted) sound(artSpec.kind === 'nuke' ? 'nuke' : artSpec.kind === 'map' ? 'war' : 'toll');
+      if (!N.muted) sound(artSpec.kind === 'nuke' ? 'nuke' : artSpec.kind === 'map' ? 'war' : artSpec.kind === 'bridge' ? 'impact' : 'toll');
     };
 
     // optional prelude: black screen, a clock ticking toward the hour
@@ -178,6 +181,8 @@ window.IM = window.IM || {};
     else if (kind === 'navy') drawNavy(ctx, cw, ch, style, t);
     else if (kind === 'city') drawCity(ctx, cw, ch, style, t);
     else if (kind === 'satellite') drawSatellite(ctx, cw, ch, art, G, t);
+    else if (kind === 'wall') drawWall(ctx, cw, ch, t);
+    else if (kind === 'bridge') drawBridge(ctx, cw, ch, t);
     else drawFlags(ctx, cw, ch, art || {}, G, style, t);
     if (style === 'ww2') newsprint(ctx, cw, ch);
     if (style === 'super') { const g = ctx.createRadialGradient(cw / 2, ch * 0.45, ch * 0.2, cw / 2, ch / 2, cw * 0.7); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.85)'); ctx.fillStyle = g; ctx.fillRect(0, 0, cw, ch); }
@@ -194,15 +199,24 @@ window.IM = window.IM || {};
     const fh = st ? st.cityHex : W.states[G.countries[G.player].capital].cityHex;
     const zoom = style === 'super' ? 1 + Math.min(t / 25, 1) * 0.1 : 1;
     const viewW = (art.span || 24) * R.HW * 1.35 / zoom, viewH = viewW * ch / cw;
-    const x0 = R.cx[fh] - viewW / 2, y0 = R.cy[fh] - viewH * (style === 'super' ? 0.33 : 0.5), sc = cw / viewW;
+    const fx = art.center ? IM.Geo.lonX(art.center[0]) : R.cx[fh], fy = art.center ? IM.Geo.latY(art.center[1]) : R.cy[fh];
+    const x0 = fx - viewW / 2, y0 = fy - viewH * (style === 'super' ? 0.33 : 0.5), sc = cw / viewW;
     const S = R.HW / Math.sqrt(3) * sc * 1.04;
     ctx.fillStyle = P.sea; ctx.fillRect(0, 0, cw, ch);
     const red = new Set(art.red || []), blue = new Set(art.blue || []);
     const X = i => { let dx = R.cx[i] - x0; if (dx < -R.worldW / 2) dx += R.worldW; if (dx > R.worldW / 2) dx -= R.worldW; return dx * sc; };
     const Y = i => (R.cy[i] - y0) * sc;
+    // a place: a state name (its city) or an exact [lon, lat]
+    const at = ref => {
+      if (typeof ref === 'string') { const s = W.stateByName[ref]; return s ? [X(s.cityHex), Y(s.cityHex)] : null; }
+      let dx = Geo.lonX(ref[0]) - x0; if (dx < -R.worldW / 2) dx += R.worldW; if (dx > R.worldW / 2) dx -= R.worldW;
+      return [dx * sc, (Geo.latY(ref[1]) - y0) * sc];
+    };
     // organic cells clipped to the real coastline, drawn in world space
     const Geo = IM.Geo, proxy = Geo.proxy;
-    const side = p => { const tg = G.countries[G.ctrl[p]]?.tag; return red.has(tg) ? 'red' : blue.has(tg) ? 'blue' : 'land'; };
+    // attackers are red unless the art asks for the defenders to be red (e.g. Ukraine attacking Russia)
+    const [atkSide, defSide] = art.swapColors ? ['blue', 'red'] : ['red', 'blue'];
+    const side = p => { const tg = G.countries[G.ctrl[p]]?.tag; return red.has(tg) ? atkSide : blue.has(tg) ? defSide : 'land'; };
     const groups = { land: new Path2D(), red: new Path2D(), blue: new Path2D() };
     const cells = [];
     const r0 = Math.max(0, Math.floor(y0 / R.RH) - 2), r1 = Math.min(W.rows - 1, Math.ceil((y0 + viewH) / R.RH) + 2);
@@ -232,31 +246,31 @@ window.IM = window.IM || {};
     ctx.restore();
     // arrows
     const labels = new Set(art.mark ? [art.mark] : []);
-    if (style === 'super') for (const [, to] of art.strikes || []) labels.add(to);
+    if (style === 'super') for (const [, to] of art.strikes || []) if (typeof to === 'string') labels.add(to);
     (art.axes || []).forEach(([from, to], n) => {
-      const A = W.stateByName[from], B = W.stateByName[to];
+      const A = at(from), B = at(to);
       if (!A || !B) return;
-      labels.add(to);
+      if (typeof to === 'string') labels.add(to);
       const p = Math.max(0, Math.min(1, prog * 1.35 - n * 0.07));
       if (p <= 0) return;
-      arrow(ctx, X(A.cityHex), Y(A.cityHex), X(B.cityHex), Y(B.cityHex), p, P, cw, style, t, n);
+      arrow(ctx, A[0], A[1], B[0], B[1], p, P, cw, style, t, n);
     });
     // missile strikes: trails from launch areas, then impacts that burn on
     (art.strikes || []).forEach(([from, to], i) => {
       if (style !== 'super') return;
-      const A = W.stateByName[from], B = W.stateByName[to];
+      const A = at(from), B = at(to);
       if (!A || !B) return;
       const t0 = 0.4 + i * 0.32, t1 = t0 + 1.1;
       if (t < t0) return;
-      const x1 = X(A.cityHex), y1 = Y(A.cityHex), x2 = X(B.cityHex) + ((i * 37) % 11 - 5) * S * 0.25, y2 = Y(B.cityHex) + ((i * 53) % 9 - 4) * S * 0.25;
+      const x1 = A[0], y1 = A[1], x2 = B[0] + ((i * 37) % 11 - 5) * S * 0.25, y2 = B[1] + ((i * 53) % 9 - 4) * S * 0.25;
       const u = Math.min(1, (t - t0) / (t1 - t0));
       const cx = (x1 + x2) / 2, cy = Math.min(y1, y2) - Math.hypot(x2 - x1, y2 - y1) * 0.35;
-      const at = v => [(1 - v) * (1 - v) * x1 + 2 * (1 - v) * v * cx + v * v * x2, (1 - v) * (1 - v) * y1 + 2 * (1 - v) * v * cy + v * v * y2];
+      const curve = v => [(1 - v) * (1 - v) * x1 + 2 * (1 - v) * v * cx + v * v * x2, (1 - v) * (1 - v) * y1 + 2 * (1 - v) * v * cy + v * v * y2];
       if (u < 1) {
         ctx.beginPath();
-        for (let k = 0; k <= 24; k++) { const v = Math.max(0, u - 0.35) + (u - Math.max(0, u - 0.35)) * k / 24; const [px, py] = at(v); k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+        for (let k = 0; k <= 24; k++) { const v = Math.max(0, u - 0.35) + (u - Math.max(0, u - 0.35)) * k / 24; const [px, py] = curve(v); k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
         ctx.strokeStyle = 'rgba(255,230,190,0.55)'; ctx.lineWidth = cw * 0.0025; ctx.stroke();
-        const [hx, hy] = at(u);
+        const [hx, hy] = curve(u);
         const g = ctx.createRadialGradient(hx, hy, 0, hx, hy, cw * 0.008); g.addColorStop(0, '#fff'); g.addColorStop(1, 'rgba(255,160,60,0)');
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(hx, hy, cw * 0.008, 0, 7); ctx.fill();
       } else {
@@ -284,14 +298,25 @@ window.IM = window.IM || {};
       placed.push(box);
       ctx.strokeText(name, x, y - fs * 0.45); ctx.fillText(name, x, y - fs * 0.45);
     }
+    // named places that are not states (beaches, villages)
+    ctx.font = `italic 600 ${Math.round(fs * 0.8)}px Georgia, serif`;
+    for (const [name, ref] of Object.entries(art.pts || {})) {
+      const [x, y] = at(ref);
+      const w = ctx.measureText(name).width, box = [x - w / 2 - 4, y - fs * 1.3, x + w / 2 + 4, y - fs * 0.2];
+      if (placed.some(p => box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1])) continue;
+      placed.push(box);
+      ctx.fillStyle = P.text; ctx.strokeStyle = P.halo; ctx.lineWidth = fs * 0.2;
+      ctx.beginPath(); ctx.arc(x, y, fs * 0.16, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.strokeText(name, x, y - fs * 0.35); ctx.fillText(name, x, y - fs * 0.35);
+    }
     if (style === 'super') { // flashes along the front
       for (let k = 0; k < 6; k++) {
         const ax = (art.axes || [])[k % Math.max(1, (art.axes || []).length)];
         if (!ax) break;
-        const B = W.stateByName[ax[1]]; if (!B) continue;
+        const B = at(ax[1]); if (!B) continue;
         const f = (Math.sin(t * 3.1 + k * 1.7) + 1) / 2;
         if (f < 0.75) continue;
-        const x = X(B.cityHex) + Math.sin(k * 12.9 + Math.floor(t * 2)) * cw * 0.04, y = Y(B.cityHex) + Math.cos(k * 7.3 + Math.floor(t * 2)) * ch * 0.05;
+        const x = B[0] + Math.sin(k * 12.9 + Math.floor(t * 2)) * cw * 0.04, y = B[1] + Math.cos(k * 7.3 + Math.floor(t * 2)) * ch * 0.05;
         const g = ctx.createRadialGradient(x, y, 0, x, y, cw * 0.03);
         g.addColorStop(0, `rgba(255,220,150,${(f - 0.75) * 3})`); g.addColorStop(1, 'rgba(255,80,20,0)');
         ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, cw * 0.03, 0, 7); ctx.fill();
@@ -404,6 +429,125 @@ window.IM = window.IM || {};
     }
     ctx.fillStyle = 'rgba(255,210,120,0.5)';
     for (const [tx, w, hh] of towers) for (let i = 0; i < 6; i++) if (r() > 0.6) ctx.fillRect(tx + w * r() * 0.8, ch * 0.78 - hh * r(), 2, 2);
+  }
+
+  // The night the Wall opened: floodlit Brandenburg Gate, people dancing on the concrete, camera flashes.
+  function drawWall(ctx, cw, ch, t) {
+    sky(ctx, cw, ch, '#060913', '#2b2436', 0.66);
+    const glow = ctx.createRadialGradient(cw / 2, ch * 0.5, 0, cw / 2, ch * 0.5, cw * 0.45);
+    glow.addColorStop(0, 'rgba(255,190,110,0.28)'); glow.addColorStop(1, 'rgba(255,190,110,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, cw, ch);
+    // Brandenburg Gate
+    const gx = cw * 0.5, gw = cw * 0.3, gy = ch * 0.3, gh = ch * 0.3;
+    ctx.fillStyle = '#b89160';
+    ctx.fillRect(gx - gw / 2, gy, gw, gh * 0.18);
+    ctx.fillRect(gx - gw * 0.12, gy - gh * 0.1, gw * 0.24, gh * 0.1);
+    for (let i = 0; i < 6; i++) { const x = gx - gw / 2 + gw * 0.02 + i * gw * 0.188; ctx.fillRect(x, gy + gh * 0.18, gw * 0.05, gh * 0.82); }
+    ctx.fillStyle = '#2a2018'; // the quadriga
+    ctx.beginPath(); ctx.ellipse(gx, gy - gh * 0.14, gw * 0.07, gh * 0.05, 0, 0, 7); ctx.fill();
+    ctx.fillRect(gx - gw * 0.005, gy - gh * 0.3, gw * 0.01, gh * 0.18);
+    // the Wall
+    const top = ch * 0.62, bottom = ch * 0.86, r = rnd(4);
+    const panel = cw * 0.052;
+    for (let x = -panel * 0.3, k = 0; x < cw; x += panel, k++) {
+      const tone = 150 + Math.round(r() * 30);
+      ctx.fillStyle = `rgb(${tone},${tone - 4},${tone - 12})`; ctx.fillRect(x, top, panel - 2, bottom - top);
+      ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fillRect(x + panel - 5, top, 3, bottom - top);
+      // graffiti
+      const hues = ['#d8322b', '#2d7bd8', '#f2c230', '#36b04a', '#e85fb0', '#ff8a1f'];
+      for (let g = 0; g < 3; g++) {
+        ctx.strokeStyle = hues[Math.floor(r() * hues.length)]; ctx.lineWidth = 3 + r() * 5; ctx.lineCap = 'round';
+        ctx.beginPath(); const sx = x + r() * panel, sy = top + (bottom - top) * (0.25 + r() * 0.6);
+        ctx.moveTo(sx, sy); ctx.bezierCurveTo(sx + r() * 40 - 20, sy - r() * 50, sx + r() * 60 - 10, sy + r() * 30, sx + r() * 50, sy - r() * 20); ctx.stroke();
+      }
+    }
+    ctx.fillStyle = '#c9c3b6'; // rounded pipe along the top
+    ctx.fillRect(0, top - ch * 0.018, cw, ch * 0.022);
+    ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(0, top - ch * 0.016, cw, ch * 0.005);
+    ctx.save(); ctx.translate(cw * 0.2, top + (bottom - top) * 0.55); ctx.rotate(-0.06);
+    ctx.font = `900 ${Math.round(cw * 0.04)}px Impact, 'Arial Black', sans-serif`; ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#d8322b'; ctx.lineWidth = 3;
+    ctx.strokeText('FREIHEIT', 0, 0); ctx.fillText('FREIHEIT', 0, 0); ctx.restore();
+    // people on top of the Wall
+    const pr = rnd(8);
+    for (let i = 0; i < 38; i++) {
+      const x = pr() * cw, bob = Math.sin(t * (2 + pr() * 3) + i) * ch * 0.006, s = ch * (0.028 + pr() * 0.01), arms = pr() > 0.5;
+      const y = top - ch * 0.018 + bob;
+      ctx.fillStyle = '#0b0a0e';
+      ctx.beginPath(); ctx.arc(x, y - s * 2.3, s * 0.42, 0, 7); ctx.fill();
+      ctx.fillRect(x - s * 0.42, y - s * 1.9, s * 0.84, s * 1.3);
+      ctx.fillRect(x - s * 0.35, y - s * 0.7, s * 0.25, s * 0.7); ctx.fillRect(x + s * 0.1, y - s * 0.7, s * 0.25, s * 0.7);
+      ctx.strokeStyle = '#0b0a0e'; ctx.lineWidth = s * 0.22; ctx.lineCap = 'round';
+      const wave = Math.sin(t * 5 + i) * 0.3;
+      ctx.beginPath();
+      if (arms) { ctx.moveTo(x - s * 0.35, y - s * 1.8); ctx.lineTo(x - s * 0.9, y - s * (3 + wave)); ctx.moveTo(x + s * 0.35, y - s * 1.8); ctx.lineTo(x + s * 0.9, y - s * (3 - wave)); }
+      else { ctx.moveTo(x - s * 0.4, y - s * 1.8); ctx.lineTo(x - s * 0.6, y - s * 0.9); ctx.moveTo(x + s * 0.4, y - s * 1.8); ctx.lineTo(x + s * 0.6, y - s * 0.9); }
+      ctx.stroke();
+    }
+    // crowd in the foreground
+    ctx.fillStyle = '#050407';
+    for (let i = 0; i < 70; i++) { const x = (i / 70) * cw + pr() * 20, s = ch * (0.04 + pr() * 0.02), y = ch + s * 0.4 - pr() * ch * 0.05 + Math.sin(t * 3 + i) * 2; ctx.beginPath(); ctx.arc(x, y - s * 1.8, s * 0.55, 0, 7); ctx.fill(); ctx.fillRect(x - s * 0.8, y - s * 1.3, s * 1.6, s * 2); }
+    // camera flashes
+    const fr = rnd(1 + Math.floor(t * 6));
+    for (let i = 0; i < 4; i++) {
+      if (fr() < 0.5) continue;
+      const x = fr() * cw, y = ch * (0.55 + fr() * 0.4), rad = cw * 0.03;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, 7); ctx.fill();
+    }
+  }
+
+  // Dawn over the Kerch Strait: a road span in the water, a fuel train burning on the rail bridge.
+  function drawBridge(ctx, cw, ch, t) {
+    sky(ctx, cw, ch, '#0a1020', '#6a3a2a', 0.58);
+    const fx = cw * 0.5, fy = ch * 0.5;
+    const halo = ctx.createRadialGradient(fx, fy, 0, fx, fy, cw * 0.5);
+    halo.addColorStop(0, 'rgba(255,140,40,0.45)'); halo.addColorStop(1, 'rgba(255,90,20,0)');
+    ctx.fillStyle = halo; ctx.fillRect(0, 0, cw, ch);
+    // water with the fire's reflection
+    const sea = ctx.createLinearGradient(0, ch * 0.58, 0, ch);
+    sea.addColorStop(0, '#1a2430'); sea.addColorStop(1, '#05080c');
+    ctx.fillStyle = sea; ctx.fillRect(0, ch * 0.58, cw, ch * 0.42);
+    const wr = rnd(12);
+    for (let i = 0; i < 90; i++) {
+      const x = fx + (wr() - 0.5) * cw * 0.42, y = ch * 0.6 + wr() * ch * 0.38, w = cw * (0.01 + wr() * 0.05) * (1 - (y - ch * 0.6) / ch);
+      ctx.fillStyle = `rgba(255,${120 + wr() * 80},40,${(0.12 + 0.18 * Math.sin(t * 4 + i)) * (1 - Math.abs(x - fx) / (cw * 0.3))})`;
+      ctx.fillRect(x - w / 2, y, w, 2);
+    }
+    // the shipping-channel arch in the distance
+    ctx.strokeStyle = '#1b1c22'; ctx.lineWidth = ch * 0.012;
+    ctx.beginPath(); ctx.moveTo(cw * 0.78, ch * 0.54); ctx.quadraticCurveTo(cw * 0.87, ch * 0.36, cw * 0.96, ch * 0.54); ctx.stroke();
+    // rail bridge (behind) and road bridge (front) on piers
+    const deck = (y, th, gapFrom, gapTo) => {
+      ctx.fillStyle = '#16171c';
+      for (let x = 0; x < cw; x += cw * 0.07) ctx.fillRect(x, y + th, cw * 0.012, ch * 0.62 - y);
+      if (gapFrom === undefined) { ctx.fillRect(0, y, cw, th); return; }
+      ctx.fillRect(0, y, gapFrom, th); ctx.fillRect(gapTo, y, cw - gapTo, th);
+    };
+    deck(ch * 0.5, ch * 0.018);
+    // burning tank wagons
+    for (let i = 0; i < 9; i++) {
+      const x = cw * 0.33 + i * cw * 0.042;
+      ctx.fillStyle = '#0c0c0f'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, ch * 0.47, cw * 0.036, ch * 0.03, ch * 0.012) : ctx.rect(x, ch * 0.47, cw * 0.036, ch * 0.03); ctx.fill();
+    }
+    // fire and smoke
+    const fr = rnd(21);
+    for (let i = 0; i < 60; i++) {
+      const u = (fr() + t * (0.08 + fr() * 0.06)) % 1;
+      const x = cw * (0.33 + fr() * 0.38) + u * cw * 0.12, y = ch * 0.47 - u * ch * 0.55, rad = cw * (0.02 + u * 0.07);
+      ctx.fillStyle = `rgba(28,24,26,${0.5 * (1 - u)})`; ctx.beginPath(); ctx.arc(x, y, rad, 0, 7); ctx.fill();
+    }
+    for (let i = 0; i < 40; i++) {
+      const x = cw * (0.34 + fr() * 0.36), fl = 0.6 + 0.4 * Math.sin(t * 9 + i * 1.7), h = ch * (0.05 + fr() * 0.08) * fl, rad = cw * 0.025;
+      const g = ctx.createRadialGradient(x, ch * 0.47 - h * 0.4, 0, x, ch * 0.47 - h * 0.4, rad + h * 0.5);
+      g.addColorStop(0, 'rgba(255,245,200,0.9)'); g.addColorStop(0.35, 'rgba(255,150,40,0.75)'); g.addColorStop(1, 'rgba(160,30,0,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, ch * 0.47 - h * 0.4, rad + h * 0.5, 0, 7); ctx.fill();
+    }
+    // road bridge with the fallen spans
+    const gap0 = cw * 0.44, gap1 = cw * 0.6, ry = ch * 0.57;
+    deck(ry, ch * 0.022, gap0, gap1);
+    ctx.fillStyle = '#121317';
+    ctx.save(); ctx.translate(gap0, ry); ctx.rotate(0.35); ctx.fillRect(0, 0, (gap1 - gap0) * 0.55, ch * 0.022); ctx.restore();
+    ctx.save(); ctx.translate(gap1, ry); ctx.rotate(Math.PI - 0.28); ctx.fillRect(0, -ch * 0.022, (gap1 - gap0) * 0.5, ch * 0.022); ctx.restore();
   }
 
   // Commercial-satellite style photo of a field camp: rows of vehicles and tents.

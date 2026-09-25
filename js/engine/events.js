@@ -50,6 +50,30 @@ window.IM = window.IM || {};
     G.relDirty = true; IM.War.rebuildRelations(G);
   };
   const setGov = (G, tag, o) => { const c = byTag(G, tag); if (c) Object.assign(c, o); G.mapDirty = true; };
+  const atWarWith = (G, a, b) => alive(G, a) && alive(G, b) && IM.War.isEnemy(G, G.tagId[a], G.tagId[b]);
+  const holds = (G, tag, city) => { const s = G.W.stateByName[city]; return !!s && G.ctrl[s.cityHex] === G.tagId[tag]; };
+  const cityHex = (G, city) => G.W.stateByName[city].cityHex;
+  // divisions within r hexes of a city that pass a filter
+  const divsNear = (G, city, r, pred) => { const h = cityHex(G, city); return G.divisions.filter(d => !d.dead && G.W.hexDist(d.hex, h) <= r && pred(d)); };
+  const hurt = (divs, org, str) => { for (const d of divs) { d.org *= 1 - org; if (str) d.str = Math.max(0.1, d.str * (1 - str)); } };
+  // land a force on the hexes of a state nearest to a point at sea (lon, lat)
+  const landForce = (G, tag, city, lon, lat, tpls) => {
+    const c = byTag(G, tag), s = G.W.stateByName[city]; if (!c || !s) return [];
+    const from = G.W.hexAt(lon, lat);
+    const shore = s.hexes.filter(h => G.W.coastal[h]).sort((a, b) => G.W.hexDist(a, from) - G.W.hexDist(b, from)).slice(0, 3);
+    if (!shore.length) return [];
+    const out = tpls.map((t, i) => { const d = IM.War.spawnDivision(G, c, t, shore[i % shore.length], 1); c.mpUsed += IM.TEMPLATES[t].mp; return d; });
+    for (const h of shore) if (!G.divisions.some(d => d.hex === h && !d.dead && IM.War.isEnemy(G, d.owner, c.id))) G.ctrl[h] = c.id;
+    G.mapDirty = true; G.supplyDirty = true;
+    return out;
+  };
+  // history diverges: a headline flagged as alternate history, with what really happened
+  E.diverge = function (G, o) {
+    G.flags = G.flags || {};
+    G.flags.divergences = (G.flags.divergences || 0) + 1;
+    IM.Game.headline(G, { type: 'news', alt: true, major: true, tone: 'warn', title: o.title, text: o.text, history: o.history, tags: o.tags || [], art: o.art || { kind: 'flags', flags: o.tags || [] } });
+    IM.Game.news(G, `Alternate history: ${o.title.charAt(0) + o.title.slice(1).toLowerCase()}`, 'event');
+  };
 
   const EV = [
     // ------------------------------------------------------------ WWII
@@ -57,6 +81,7 @@ window.IM = window.IM || {};
       id: 'sov_poland', headline: 'RED ARMY CROSSES INTO POLAND', news: `Soviet troops have crossed Poland's eastern border, claiming to protect the Ukrainian and Belarusian population. With the Polish army already fighting for its life in the west, Poland has been stabbed in the back.`, eras: ['1939'], date: [1939, 9, 17], actor: 'SOV', title: 'The Fourth Partition',
       text: 'With the Polish army collapsing under the German onslaught, the secret protocol of the Molotov-Ribbentrop Pact gives us eastern Poland. Our troops stand ready on the border.',
       cond: G => exists(G, 'POL') && exists(G, 'SOV'),
+      history: 'Soviet troops invaded eastern Poland on 17 September 1939 under the secret protocol of the Molotov–Ribbentrop Pact.',
       options: [
         { label: 'Occupy the Kresy', fx: G => takeStates(G, ['Lviv', 'Rivne', 'Brest-Litovsk', 'Grodno', 'Vilnius', 'Bialystok'], 'SOV', ['POL']) },
         { label: 'Honour Polish sovereignty', fx: G => {} },
@@ -66,6 +91,7 @@ window.IM = window.IM || {};
       id: 'winter_war', headline: 'SOVIETS ATTACK FINLAND', news: `After Helsinki rejected Moscow's territorial demands, Soviet bombers struck the Finnish capital and the Red Army crossed the border on the Karelian Isthmus. The Finns man the Mannerheim Line.`, eras: ['1939'], date: [1939, 11, 30], actor: 'SOV', title: 'The Winter War',
       text: 'Finland has refused our demands for territory on the Karelian Isthmus. Leningrad lies within artillery range of the border.',
       cond: G => alive(G, 'FIN') && alive(G, 'SOV'),
+      history: 'The Soviet Union attacked Finland on 30 November 1939. Finland held out until March 1940 and kept its independence.',
       options: [
         { label: 'Attack Finland', fx: G => E.limitedWar(G, 'Winter War', ['SOV'], ['FIN']) },
         { label: 'Leave Finland be', fx: G => {} },
@@ -103,6 +129,7 @@ window.IM = window.IM || {};
       id: 'italy_joins', headline: 'ITALY DECLARES WAR ON BRITAIN AND FRANCE', news: `From the balcony of the Palazzo Venezia, Mussolini has announced Italy's entry into the war at Germany's side as French armies fall back on Paris.`, eras: ['1939'], date: [1940, 6, 10], actor: 'ITA', title: 'The Hand That Held the Dagger',
       text: 'The Wehrmacht is at the gates of Paris. Il Duce believes that a few thousand dead will buy Italy a seat at the peace conference.',
       cond: G => alive(G, 'ITA') && alive(G, 'DEU') && alive(G, 'GBR') && !IM.War.atWar(G, G.tagId.ITA),
+      history: 'Italy declared war on Britain and France on 10 June 1940.',
       options: [
         { label: 'Declare war on the Allies', fx: G => joinFactionByName(G, 'ITA', 'Axis') },
         { label: 'Remain non-belligerent', fx: G => {} },
@@ -112,6 +139,7 @@ window.IM = window.IM || {};
       id: 'barbarossa', super: 'barbarossa', eras: ['1939'], date: [1941, 6, 22], actor: 'DEU', title: 'Operation Barbarossa',
       text: 'The Führer\'s long-awaited war of annihilation in the East is ready. Three army groups await the signal.',
       cond: G => alive(G, 'DEU') && alive(G, 'SOV') && !IM.War.isEnemy(G, G.tagId.DEU, G.tagId.SOV),
+      history: 'Germany invaded the Soviet Union on 22 June 1941.',
       options: [
         { label: 'Launch Barbarossa', fx: G => IM.War.declare(G, G.tagId.DEU, G.tagId.SOV, 'Operation Barbarossa') },
         { label: 'Postpone the invasion', fx: G => {} },
@@ -121,6 +149,7 @@ window.IM = window.IM || {};
       id: 'pearl_harbor', super: 'pearl_harbor', eras: ['1939', '1941'], date: [1941, 12, 7], actor: 'JPN', title: 'Climb Mount Niitaka',
       text: 'The American oil embargo is strangling the Empire. The carrier strike force is in position north of Hawaii.',
       cond: G => alive(G, 'JPN') && alive(G, 'USA') && !IM.War.isEnemy(G, G.tagId.JPN, G.tagId.USA),
+      history: 'Japan attacked Pearl Harbor on 7 December 1941, bringing the United States into the war.',
       options: [
         {
           label: 'Strike Pearl Harbor', fx: G => {
@@ -144,6 +173,7 @@ window.IM = window.IM || {};
       id: 'august_storm', headline: 'SOVIET UNION DECLARES WAR ON JAPAN', news: `Honouring its promise at Yalta, the Soviet Union has attacked the Kwantung Army in Manchuria along a front thousands of kilometres long.`, eras: ['1945'], date: [1945, 8, 9], actor: 'SOV', title: 'Operation August Storm',
       text: 'As promised at Yalta, three months after the defeat of Germany we turn east against Japan\'s Kwantung Army.',
       cond: G => alive(G, 'SOV') && alive(G, 'JPN') && !IM.War.isEnemy(G, G.tagId.SOV, G.tagId.JPN) && !IM.War.atWar(G, G.tagId.SOV),
+      history: 'The Soviet Union invaded Manchuria on 9 August 1945, days before Japan surrendered.',
       options: [
         { label: 'Attack Manchuria', fx: G => IM.War.declare(G, G.tagId.SOV, G.tagId.JPN, 'Soviet-Japanese War') },
         { label: 'Stay out of the Pacific', fx: G => {} },
@@ -175,6 +205,7 @@ window.IM = window.IM || {};
       id: 'ussr_end', super: 'ussr_end', eras: ['1991'], date: [1991, 12, 26], actor: 'SOV', title: 'The End of the Soviet Union',
       text: 'The Belavezha Accords have been signed. Gorbachev prepares a resignation speech. The red flag over the Kremlin will come down tonight - unless we act.',
       cond: G => exists(G, 'SOV'),
+      history: 'The Soviet Union was dissolved on 26 December 1991, and fifteen republics became independent.',
       options: [
         {
           label: 'Dissolve the Union', fx: G => {
@@ -204,6 +235,7 @@ window.IM = window.IM || {};
       id: '911', super: 'sept11', eras: ['2000'], date: [2001, 9, 11], actor: 'USA', title: 'September 11',
       text: 'Hijacked airliners have struck the World Trade Center and the Pentagon. The trail leads to al-Qaeda camps in Taliban-ruled Afghanistan.',
       cond: G => alive(G, 'USA') && alive(G, 'AFG'),
+      history: 'The United States invaded Afghanistan in October 2001 and stayed for twenty years.',
       options: [
         { label: 'Invoke Article 5 - invade Afghanistan', fx: G => { IM.War.declare(G, G.tagId.USA, G.tagId.AFG, 'War in Afghanistan'); byTag(G, 'USA').ws = 0.85; } },
         { label: 'Limited strikes only', fx: G => { byTag(G, 'USA').stab -= 0.1; } },
@@ -213,6 +245,7 @@ window.IM = window.IM || {};
       id: 'iraq2003', headline: 'COALITION INVADES IRAQ', news: `American and British forces have crossed from Kuwait into Iraq after a night of strikes on Baghdad. Their stated aim: to disarm Iraq and remove Saddam Hussein.`, eras: ['2000'], date: [2003, 3, 20], actor: 'USA', title: 'Shock and Awe',
       text: 'The ultimatum to Saddam Hussein has expired. A coalition force waits in Kuwait.',
       cond: G => alive(G, 'USA') && alive(G, 'IRQ'),
+      history: 'A US-led coalition invaded Iraq on 20 March 2003 and toppled Saddam Hussein within three weeks.',
       options: [
         { label: 'Invade Iraq', fx: G => E.limitedWar(G, 'Iraq War', ['USA', 'GBR', 'AUS', 'POL'], ['IRQ']) },
         { label: 'Continue containment', fx: G => {} },
@@ -228,6 +261,7 @@ window.IM = window.IM || {};
       id: 'georgia2008', headline: 'RUSSIA AND GEORGIA AT WAR', news: `After fighting erupted in South Ossetia, Russian armour has poured through the Roki Tunnel into Georgia.`, eras: ['2000'], date: [2008, 8, 8], actor: 'RUS', title: 'The Five-Day War',
       text: 'Georgian forces have moved into South Ossetia. Our 58th Army is at the Roki Tunnel.',
       cond: G => alive(G, 'RUS') && alive(G, 'GEO') && byTag(G, 'GEO').faction < 0,
+      history: 'Russia fought a five-day war with Georgia in August 2008.',
       options: [
         { label: 'Strike Georgia', fx: G => E.limitedWar(G, 'Russo-Georgian War', ['RUS'], ['GEO']) },
         { label: 'Diplomatic protest', fx: G => {} },
@@ -243,6 +277,7 @@ window.IM = window.IM || {};
       id: 'crimea', headline: 'RUSSIA ANNEXES CRIMEA', news: `Unmarked soldiers seized Crimea's parliament and airports; after a hastily organised referendum, Moscow has annexed the peninsula. In the Donbas, Russian-backed separatists have proclaimed "people's republics".`, eras: ['2000'], date: [2014, 2, 27], actor: 'RUS', title: 'Polite People',
       text: 'Ukraine\'s president has fled Kyiv. Unmarked soldiers are ready to seize Crimea, and separatists in the Donbas await our support.',
       cond: G => alive(G, 'RUS') && alive(G, 'UKR') && !IM.War.isEnemy(G, G.tagId.RUS, G.tagId.UKR),
+      history: 'Russia annexed Crimea in March 2014 and backed separatist “people\'s republics” in the Donbas.',
       options: [
         {
           label: 'Annex Crimea, back the separatists', fx: G => {
@@ -272,6 +307,7 @@ window.IM = window.IM || {};
       id: 'invasion2022', super: 'invasion2022', eras: ['2021'], date: [2022, 2, 24], actor: 'RUS', title: 'Special Military Operation',
       text: 'Our forces are massed on three sides of Ukraine. The General Staff promises Kyiv in three days.',
       cond: G => alive(G, 'RUS') && alive(G, 'UKR') && !IM.War.isEnemy(G, G.tagId.RUS, G.tagId.UKR),
+      history: 'Russia launched its full-scale invasion of Ukraine on 24 February 2022.',
       options: [
         { label: 'Begin the operation', fx: G => { E.limitedWar(G, 'Russo-Ukrainian War', ['RUS', 'DPR', 'LPR'], ['UKR']); for (const t of G.countries) if (t.alive && t.faction >= 0 && G.factions[t.faction].name === 'NATO') byTag(G, 'RUS').sanctionedBy.add(t.id); } },
         { label: 'Stand down', fx: G => {} },
@@ -315,6 +351,7 @@ window.IM = window.IM || {};
       headline: 'RUSSIA RECOGNISES DONETSK AND LUHANSK "REPUBLICS"', news: `In a televised hour-long address, the Russian president recognises the independence of the two separatist regions and orders troops in as "peacekeepers". Western capitals call it the end of the Minsk agreements.`,
       text: 'The Security Council has spoken, one after another, in favour of recognising the Donetsk and Luhansk People\'s Republics. Recognition would tear up the Minsk agreements and let our troops enter the Donbas openly.',
       cond: G => alive(G, 'RUS') && alive(G, 'UKR') && !IM.War.isEnemy(G, G.tagId.RUS, G.tagId.UKR),
+      history: 'Russia recognised the Donetsk and Luhansk “people\'s republics” on 21 February 2022, three days before the invasion.',
       options: [
         { label: 'Sign the decrees', fx: G => { G.tension = Math.min(100, G.tension + 10); const r = byTag(G, 'RUS'); for (const t of G.countries) if (t.alive && t.faction >= 0 && G.factions[t.faction].name === 'NATO') r.sanctionedBy.add(t.id); } },
         { label: 'Keep the Minsk process alive', fx: G => { G.tension = Math.max(0, G.tension - 10); } },
@@ -332,6 +369,7 @@ window.IM = window.IM || {};
       headline: 'ZELENSKYY: "I NEED AMMUNITION, NOT A RIDE"', news: `Ukraine's president has refused offers to evacuate him from Kyiv, declaring general mobilisation as volunteers queue outside recruitment offices across the country.`,
       text: 'Our allies are offering to fly the President out of Kyiv tonight. Outside the Presidential Office, volunteers are queuing for rifles. The world is watching to see whether Ukraine\'s government will stay or go. "The fight is here. I need ammunition, not a ride."',
       wait: 30, cond: G => alive(G, 'UKR') && alive(G, 'RUS') && IM.War.isEnemy(G, G.tagId.UKR, G.tagId.RUS),
+      history: 'President Zelenskyy stayed in Kyiv: “The fight is here; I need ammunition, not a ride.”',
       options: [
         { label: '"We are all here." Defend Kyiv, general mobilisation', fx: G => { const u = byTag(G, 'UKR'); u.laws.draft = 3; u.ws = Math.min(1, u.ws + 0.1); u.stab = Math.min(1, u.stab + 0.05); u.pp += 40; IM.Game.raiseMilitia(G, u, 6); } },
         { label: 'Move the government to Lviv', fx: G => { const u = byTag(G, 'UKR'); const l = G.W.stateByName.Lviv; if (G.owner[l.id] === u.id) u.capital = l.id; u.stab = Math.max(0, u.stab - 0.05); IM.Game.raiseMilitia(G, u, 3); } },
@@ -341,6 +379,7 @@ window.IM = window.IM || {};
       id: 'annex2022', headline: 'RUSSIA ANNEXES OCCUPIED UKRAINIAN REGIONS', news: `After referendums condemned around the world, the Kremlin has declared the occupied regions of Ukraine part of Russia.`, eras: ['2021', '2022'], date: [2022, 9, 30], actor: 'RUS', title: 'The Referendums',
       text: 'Referendums have been held in the occupied territories. The Kremlin prepares to declare them part of Russia.',
       cond: G => alive(G, 'RUS') && G.wars.some(w => w.name === 'Russo-Ukrainian War'),
+      history: 'Russia declared the annexation of four partly occupied Ukrainian regions on 30 September 2022.',
       options: [
         {
           label: 'Annex the territories', fx: G => {
@@ -399,6 +438,193 @@ window.IM = window.IM || {};
         { label: 'Keep up the pressure', fx: G => { G.tension = Math.min(100, G.tension + 10); } },
       ],
       aiChance: 0.35,
+    },
+    // ------------------------------------------------------------ turning points
+    {
+      id: 'dunkirk', eras: ['1939'], date: [1940, 5, 28], actor: 'GBR', title: 'Operation Dynamo',
+      headline: 'THE ARMY COMES HOME FROM DUNKIRK', news: `Under a pall of smoke from the burning oil tanks, destroyers, ferries and hundreds of little ships are lifting the British Expeditionary Force off the beaches at Dunkirk. The equipment is lost; the men are coming home.`,
+      text: 'The panzers have reached the Channel and the BEF is trapped around Dunkirk. The Admiralty proposes to evacuate the army in anything that floats.',
+      cond: G => atWarWith(G, 'GBR', 'DEU') && (holds(G, 'DEU', 'Brussels') || holds(G, 'DEU', 'Lille')),
+      history: 'Between 26 May and 4 June 1940, 338,000 Allied soldiers were evacuated from Dunkirk, and Britain fought on.',
+      options: [
+        { label: 'Evacuate the army', fx: G => { const b = byTag(G, 'GBR'); b.ws = Math.min(1, b.ws + 0.1); b.stock.inf = Math.round(b.stock.inf * 0.8); b.stock.art = Math.round(b.stock.art * 0.7); } },
+        { label: 'Stand and fight in Flanders', fx: G => { const b = byTag(G, 'GBR'); b.ws = Math.min(1, b.ws + 0.05); } },
+      ],
+    },
+    {
+      id: 'moscow_counter', eras: ['1939', '1941'], date: [1941, 12, 5], actor: 'SOV', title: 'The Counteroffensive before Moscow',
+      headline: 'RED ARMY COUNTERATTACKS BEFORE MOSCOW', news: `In forty degrees of frost, fresh Siberian divisions have struck the exhausted German armies at the gates of Moscow. The Wehrmacht, without winter clothing, is falling back for the first time in the war.`,
+      text: 'The Germans are within sight of the Kremlin, frozen and exhausted. Fresh divisions from Siberia have arrived. Zhukov asks for permission to strike.',
+      cond: G => atWarWith(G, 'SOV', 'DEU') && holds(G, 'SOV', 'Moscow') && divsNear(G, 'Moscow', 10, d => d.owner === G.tagId.DEU).length > 0,
+      alt: {
+        cond: G => atWarWith(G, 'SOV', 'DEU') && !holds(G, 'SOV', 'Moscow'),
+        title: 'NO MIRACLE BEFORE MOSCOW', tags: ['DEU', 'SOV'],
+        text: 'Winter has come, but the Soviet capital is no longer in Soviet hands. The government runs the war from Kuibyshev on the Volga while German troops dig in among the ruins of Moscow.',
+        history: 'On 5 December 1941 the Red Army counterattacked before Moscow and drove the Wehrmacht back up to 250 km. It was Germany\'s first major defeat on land.',
+      },
+      options: [
+        {
+          label: 'Unleash the Siberian divisions', fx: G => {
+            const sov = byTag(G, 'SOV');
+            hurt(divsNear(G, 'Moscow', 10, d => IM.War.isEnemy(G, d.owner, sov.id)), 0.45);
+            for (let i = 0; i < 6; i++) IM.War.spawnDivision(G, sov, i % 3 ? 'inf' : 'mnt', cityHex(G, 'Moscow'), 1).name = `${[78, 32, 93, 239, 82, 107][i]}th Siberian Rifle`;
+          },
+        },
+      ],
+    },
+    {
+      id: 'uranus', super: 'stalingrad', eras: ['1939', '1941'], date: [1942, 11, 19], actor: 'SOV', title: 'Operation Uranus',
+      text: 'The Sixth Army is bleeding in the ruins of Stalingrad. Its flanks are held by thinly stretched Romanian armies. The Stavka has massed a million men north and south of the city.',
+      cond: G => atWarWith(G, 'SOV', 'DEU') && holds(G, 'SOV', 'Stalingrad') && divsNear(G, 'Stalingrad', 12, d => IM.War.isEnemy(G, d.owner, G.tagId.SOV)).length > 0,
+      alt: {
+        cond: G => atWarWith(G, 'SOV', 'DEU') && !holds(G, 'SOV', 'Stalingrad'),
+        title: 'THE SWASTIKA OVER THE VOLGA', tags: ['DEU', 'SOV'],
+        text: 'Stalingrad has fallen. With the Volga cut, oil from the Caucasus can no longer reach the Soviet heartland by river, and Berlin radio speaks of the decisive victory in the East.',
+        history: 'The Sixth Army was encircled at Stalingrad on 19 November 1942 and surrendered on 2 February 1943.',
+      },
+      history: 'Operation Uranus trapped about 290,000 Axis soldiers at Stalingrad. Fewer than 6,000 ever came home.',
+      options: [
+        {
+          label: 'Close the ring', fx: G => {
+            const sov = byTag(G, 'SOV');
+            hurt(divsNear(G, 'Stalingrad', 9, d => IM.War.isEnemy(G, d.owner, sov.id)), 0.6, 0.25);
+            const tpls = sov.mods.mechanized ? ['arm', 'arm', 'mec', 'inf', 'inf', 'inf'] : ['inf', 'inf', 'inf', 'mnt', 'inf', 'inf'];
+            for (const t of tpls) IM.War.spawnDivision(G, sov, t, cityHex(G, 'Stalingrad'), 1);
+            sov.ws = Math.min(1, sov.ws + 0.1);
+            const deu = byTag(G, 'DEU'); if (deu) deu.stab = Math.max(0, deu.stab - 0.06);
+          },
+        },
+        { label: 'Wait for the spring', fx: G => {} },
+      ],
+    },
+    {
+      id: 'overlord', super: 'dday', eras: ['1939', '1941'], date: [1944, 6, 6], actor: 'USA', title: 'Operation Overlord',
+      text: 'The largest amphibious force in history is loaded in the ports of southern England. The weather will clear for a few hours on the 6th. General Eisenhower must decide.',
+      cond: G => atWarWith(G, 'USA', 'DEU') && alive(G, 'GBR') && holds(G, 'GBR', 'London') && (holds(G, 'DEU', 'Rouen') || holds(G, 'VIC', 'Rouen')),
+      alt: {
+        cond: G => atWarWith(G, 'GBR', 'DEU') && !holds(G, 'GBR', 'London'),
+        title: 'NO SECOND FRONT', tags: ['GBR', 'DEU'],
+        text: 'With London under German occupation, there is no island fortress from which to invade Europe. The armies that should have sailed for Normandy wait in Canada and the United States.',
+        history: 'On 6 June 1944, 156,000 Allied troops landed in Normandy and opened the second front in the West.',
+      },
+      history: 'Eisenhower launched Overlord on 6 June 1944 after a one-day postponement. Paris was liberated eleven weeks later.',
+      options: [
+        {
+          label: 'OK, let\'s go', fx: G => {
+            landForce(G, 'USA', 'Rouen', -1.2, 49.6, ['mar', 'mar', 'inf', 'inf', 'arm', 'inf']);
+            landForce(G, 'GBR', 'Rouen', -0.3, 49.6, ['mar', 'inf', 'inf', 'arm']);
+            if (alive(G, 'CAN')) landForce(G, 'CAN', 'Rouen', -0.4, 49.6, ['inf']);
+            hurt(divsNear(G, 'Rouen', 4, d => d.owner === G.tagId.DEU), 0.35);
+          },
+        },
+        { label: 'Postpone for better weather', fx: G => {} },
+      ],
+    },
+    {
+      id: 'moskva', eras: ['2021', '2022'], date: [2022, 4, 14], actor: 'UKR', title: 'Two Neptunes',
+      headline: 'FLAGSHIP MOSKVA SINKS IN THE BLACK SEA', news: `The Russian Black Sea Fleet's flagship, the missile cruiser Moskva, has sunk. Ukraine says two Neptune anti-ship missiles hit her off Odesa; Moscow speaks of a fire and an ammunition explosion.`,
+      text: 'Our coastal battery near Odesa has the enemy flagship in its sights.',
+      cond: G => atWarWith(G, 'UKR', 'RUS'),
+      options: [{ label: 'Fire', fx: G => { const r = byTag(G, 'RUS'); r.stock.nav = Math.round(r.stock.nav * 0.96); r.ws = Math.max(0, r.ws - 0.03); const u = byTag(G, 'UKR'); u.ws = Math.min(1, u.ws + 0.05); } }],
+    },
+    {
+      id: 'kharkiv_counter', eras: ['2021', '2022'], date: [2022, 9, 6], actor: 'UKR', title: 'The Kharkiv Counteroffensive',
+      headline: 'UKRAINE BREAKS THROUGH NEAR KHARKIV', news: `Ukrainian forces have broken through thinly held Russian lines east of Kharkiv, advancing tens of kilometres in days and retaking Balakliia, Kupiansk and Izium. Abandoned tanks line the roads.`,
+      text: 'The enemy has stripped the Kharkiv front to reinforce Kherson. Our reconnaissance sees a line of checkpoints, not a defence.',
+      cond: G => atWarWith(G, 'UKR', 'RUS') && holds(G, 'UKR', 'Kharkiv') && G.W.stateByName.Kharkiv.hexes.some(h => G.ctrl[h] === G.tagId.RUS),
+      alt: {
+        cond: G => atWarWith(G, 'UKR', 'RUS') && holds(G, 'RUS', 'Kharkiv'),
+        title: 'KHARKIV UNDER THE RUSSIAN FLAG', tags: ['RUS', 'UKR'],
+        text: 'Ukraine\'s second city is under occupation this September. Its metro stations, which sheltered thousands in the spring, are now Russian command posts.',
+        history: 'Kharkiv never fell. In September 2022 a Ukrainian counteroffensive liberated almost all of Kharkiv oblast in a week.',
+      },
+      options: [{
+        label: 'Attack', fx: G => {
+          const u = byTag(G, 'UKR'), rus = G.tagId.RUS;
+          hurt(divsNear(G, 'Kharkiv', 6, d => d.owner === rus), 0.5, 0.1);
+          for (const d of divsNear(G, 'Kharkiv', 6, d => d.owner === u.id)) d.org = IM.War.stats(G, d).org;
+        },
+      }],
+    },
+    {
+      id: 'kerch', super: 'kerch', eras: ['2021', '2022'], date: [2022, 10, 8], actor: 'UKR', title: 'The Crimean Bridge',
+      text: 'The Kerch bridge carries almost every train and truck that supplies the Russian army in southern Ukraine. The security service has a plan.',
+      cond: G => atWarWith(G, 'UKR', 'RUS') && holds(G, 'RUS', 'Simferopol'),
+      history: 'On 8 October 2022 a truck bomb brought down two road spans of the Kerch bridge and set a fuel train ablaze. It took months to repair.',
+      options: [
+        {
+          label: 'Hit the bridge', fx: G => {
+            G.flags = G.flags || {}; G.flags.kerchUntil = G.hour + 24 * 50;
+            const rus = G.tagId.RUS, south = ['Simferopol', 'Kherson', 'Zaporizhzhia'];
+            hurt(G.divisions.filter(d => d.owner === rus && G.W.region[d.hex] && south.includes(G.W.states[G.W.stateOf[d.hex]].name)), 0.25);
+            const r = byTag(G, 'RUS'); r.stab = Math.max(0, r.stab - 0.03);
+            G.supplyDirty = true;
+          },
+        },
+        { label: 'Too risky', fx: G => {} },
+      ],
+    },
+    {
+      id: 'energy_strikes', eras: ['2021', '2022'], date: [2022, 10, 10], actor: 'RUS', title: 'Strikes on the Grid',
+      headline: 'MISSILES RAIN ON UKRAINE\'S POWER STATIONS', news: `In the largest barrage since February, Russian missiles and drones have hit power stations and substations across Ukraine. Blackouts roll through Kyiv, Lviv and Kharkiv as winter approaches.`,
+      text: 'The General Staff proposes a campaign against Ukraine\'s energy grid to freeze the country before winter.',
+      cond: G => atWarWith(G, 'RUS', 'UKR'),
+      history: 'From October 2022 Russia struck Ukraine\'s energy system in waves of missiles and Shahed drones. Nearly half of it was damaged by winter.',
+      options: [
+        { label: 'Target the grid', fx: G => { const u = byTag(G, 'UKR'); u.stab = Math.max(0, u.stab - 0.04); u.cyberDays = Math.max(u.cyberDays, 5); G.tension = Math.min(100, G.tension + 4); } },
+        { label: 'Stick to military targets', fx: G => {} },
+      ],
+    },
+    {
+      id: 'kherson_out', eras: ['2021', '2022'], date: [2022, 11, 9], actor: 'RUS', title: 'Withdrawal from Kherson',
+      headline: 'RUSSIA PULLS OUT OF KHERSON', news: `Russia's defence minister has ordered troops back across the Dnipro. Two days later, Ukrainian soldiers are met with flags and tears in the centre of Kherson, the only regional capital Russia had captured since February.`,
+      text: 'General Surovikin reports that our bridgehead on the right bank of the Dnipro can no longer be supplied. He proposes a withdrawal to the left bank.',
+      cond: G => atWarWith(G, 'RUS', 'UKR') && holds(G, 'RUS', 'Kherson'),
+      alt: {
+        cond: G => atWarWith(G, 'RUS', 'UKR') && holds(G, 'UKR', 'Kherson'),
+        title: 'KHERSON NEVER FELL', tags: ['UKR', 'RUS'],
+        text: 'The Russian drive out of Crimea stalled before Kherson. The city on the Dnipro has spent the war under the Ukrainian flag.',
+        history: 'Kherson fell on 2 March 2022, the only regional capital Russia captured that year. It was liberated on 11 November 2022.',
+      },
+      history: 'Russia announced its withdrawal from Kherson on 9 November 2022. Ukrainian troops entered the city on the 11th.',
+      options: [
+        {
+          label: 'Withdraw across the Dnipro', fx: G => {
+            const rus = G.tagId.RUS, ukr = G.tagId.UKR, s = G.W.stateByName.Kherson;
+            const back = G.W.stateByName.Simferopol.cityHex;
+            for (const d of G.divisions.filter(d => d.owner === rus && G.W.stateOf[d.hex] === s.id && d.battle < 0)) { d.path = []; d.hex = back; }
+            for (const h of s.hexes) if (G.ctrl[h] === rus && G.owner[s.id] === ukr && !G.divisions.some(d => d.hex === h && d.owner === rus && !d.dead)) G.ctrl[h] = ukr;
+            G.mapDirty = true; G.supplyDirty = true;
+          },
+        },
+        { label: 'Hold the bridgehead at all costs', fx: G => { const r = byTag(G, 'RUS'); r.ws = Math.min(1, r.ws + 0.03); } },
+      ],
+    },
+    {
+      id: 'kursk2024', super: 'kursk2024', eras: ['2021', '2022'], date: [2024, 8, 6], actor: 'UKR', title: 'Operation in Kursk Oblast',
+      text: 'The Russian border opposite Sumy is held by conscripts and border guards. A strike into Russia itself would force the enemy to pull troops out of the Donbas, and give us something to trade at the table.',
+      cond: G => atWarWith(G, 'UKR', 'RUS') && holds(G, 'UKR', 'Sumy') && holds(G, 'RUS', 'Kursk'),
+      aiChance: 0.8,
+      history: 'On 6 August 2024 Ukrainian brigades crossed into Kursk oblast, the first invasion of Russian territory since 1941. Russia retook the area by spring 2025.',
+      options: [
+        {
+          label: 'Cross the border', fx: G => {
+            const u = byTag(G, 'UKR'), rus = G.tagId.RUS, W = G.W, k = W.stateByName.Kursk;
+            const free = h => !G.divisions.some(d => d.hex === h && d.owner === rus && !d.dead);
+            // a salient two hexes deep along the border with Sumy
+            for (let ring = 0; ring < 2; ring++) {
+              const front = k.hexes.filter(h => G.ctrl[h] === rus && [...W.neighbors(h)].some(j => G.ctrl[j] === u.id));
+              for (const h of front) if (free(h)) G.ctrl[h] = u.id;
+            }
+            const taken = k.hexes.filter(h => G.ctrl[h] === u.id);
+            if (taken.length) for (const t of ['mec', 'mec', 'arm', 'inf']) { IM.War.spawnDivision(G, u, t, taken[Math.floor(taken.length / 2)], 1); u.mpUsed += IM.TEMPLATES[t].mp; }
+            const r = byTag(G, 'RUS'); r.stab = Math.max(0, r.stab - 0.05);
+            u.ws = Math.min(1, u.ws + 0.08);
+            G.mapDirty = true; G.supplyDirty = true;
+          },
+        },
+        { label: 'Keep our reserves for the Donbas', fx: G => {} },
+      ],
     },
   ];
   E.list = EV;
@@ -460,7 +686,10 @@ window.IM = window.IM || {};
       const t = Date.UTC(ev.date[0], ev.date[1] - 1, ev.date[2]);
       if (now < t) continue;
       if (now > t + (ev.wait || 120) * 864e5) { G.firedEvents.add(ev.id); continue; } // stale
-      if (!ev.cond(G)) { if (!ev.wait) G.firedEvents.add(ev.id); continue; }
+      if (!ev.cond(G)) {
+        if (!ev.wait) { G.firedEvents.add(ev.id); if (ev.alt && ev.alt.cond(G)) E.diverge(G, ev.alt); }
+        continue;
+      }
       G.firedEvents.add(ev.id);
       const actor = byTag(G, ev.actor);
       if (!actor || !actor.alive) continue;
@@ -472,6 +701,7 @@ window.IM = window.IM || {};
         try { ev.options[pick].fx(G); } finally { G._eventFiring = false; }
         G.relDirty = true;
         if (pick === 0) E.announce(G, ev, actor);
+        else if (ev.history) otherPath(G, ev, actor, pick, false);
       }
     }
   };
@@ -483,11 +713,21 @@ window.IM = window.IM || {};
     if (ev.options.length > 1 || ev.super) IM.Game.news(G, `${ev.title} (${actor.name})`, 'event');
   };
 
+  // someone took a road history did not
+  function otherPath(G, ev, actor, pick, mine) {
+    const label = ev.options[pick].label.replace(/\s*\(.*\)$/, '');
+    E.diverge(G, {
+      title: ev.title.toUpperCase(), tags: [ev.actor],
+      text: mine ? `We have chosen a different path: “${label}”.` : `${actor.name} has chosen a different path: “${label}”. Diplomats and generals around the world are redrawing their plans.`,
+      history: ev.history,
+    });
+  }
   E.resolve = function (G, id, optIndex) {
     const ev = EV.find(e => e.id === id);
     G._eventFiring = true;
     try { ev.options[optIndex].fx(G); } finally { G._eventFiring = false; }
     if (optIndex === 0 && ev.super) IM.Game.headline(G, { type: 'super', key: ev.super, tags: [ev.actor] });
+    if (optIndex > 0 && ev.history) otherPath(G, ev, IM.Game.byTag(G, ev.actor), optIndex, true);
     G.relDirty = true;
     IM.War.rebuildRelations(G);
     IM.Game.news(G, `${ev.title}: ${ev.options[optIndex].label}`, 'event');

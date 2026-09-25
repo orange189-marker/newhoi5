@@ -124,6 +124,57 @@ window.IM = window.IM || {};
       }
     }
     Geo.coast = coast;
+    // rivers (three ranks) and lakes
+    const decode = (str, p, close) => {
+      const d = str.split(','); let x = 0, y = 0;
+      for (let k = 0; k < d.length; k += 2) {
+        x += parseInt(d[k], 36); y += parseInt(d[k + 1], 36);
+        const px = lonX(x / q), py = latY(y / q);
+        if (k) p.lineTo(px, py); else p.moveTo(px, py);
+      }
+      if (close) p.closePath();
+    };
+    Geo.rivers = [null, new Path2D(), new Path2D(), new Path2D()];
+    for (const r of IM.COAST.rivers || []) decode(r.slice(2), Geo.rivers[+r[0]], false);
+    Geo.lakes = new Path2D();
+    for (const l of IM.COAST.lakes || []) decode(l, Geo.lakes, true);
+    // relief: a smoothed height field from the terrain, lit from the north-west
+    const TN = W.terrainNames, hgt = new Float32Array(n);
+    for (let i = 0; i < n; i++) if (W.region[i]) { const t = TN[W.terrain[i]]; hgt[i] = t === 'mountain' ? 1 : t === 'hills' ? 0.45 : t === 'arctic' ? 0.12 : 0; }
+    let e = hgt;
+    for (let pass = 0; pass < 2; pass++) {
+      const o = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        let sum = e[i] * 2, cnt = 2;
+        for (let k = 0; k < 6; k++) { const j = W.nb[i * 6 + k]; if (j >= 0) { sum += e[j]; cnt++; } }
+        o[i] = Math.max(hgt[i] * 0.8, sum / cnt);
+      }
+      e = o;
+    }
+    Geo.height = e;
+    // hillshade image, two pixels per hex so odd rows can shift by half a hex; the
+    // renderer scales it up with smoothing, which turns it into soft relief
+    if (typeof document !== 'undefined') {
+      const cols = W.cols, rows = W.rows, cv = document.createElement('canvas');
+      cv.width = cols * 2; cv.height = rows;
+      const x = cv.getContext('2d'), img = x.createImageData(cols * 2, rows), d = img.data;
+      for (let i = 0; i < n; i++) {
+        if (!W.region[i] && proxy[i] < 0) continue;
+        const h = W.region[i] ? i : proxy[i];
+        // neighbour order: E, W, NE, NW, SE, SW; light comes from the north-west
+        const at = k => { const j = W.nb[h * 6 + k]; return j >= 0 ? e[j] : e[h]; };
+        const v = ((at(4) - at(3)) + 0.5 * (at(0) - at(1)) + 0.3 * (at(5) - at(2))) * 3.2 - e[h] * 0.2;
+        const r = (i / cols) | 0, c = i % cols;
+        for (let k = 0; k < 2; k++) {
+          const o = (r * cols * 2 + ((c * 2 + (r & 1) + k) % (cols * 2))) * 4;
+          const lightPx = v > 0, a = Math.min(lightPx ? 0.2 : 0.26, Math.abs(v) * (lightPx ? 0.13 : 0.17));
+          d[o] = d[o + 1] = d[o + 2] = lightPx ? 255 : 0; if (lightPx) d[o + 2] = 235;
+          d[o + 3] = Math.round(a * 255);
+        }
+      }
+      x.putImageData(img, 0, 0);
+      Geo.relief = cv;
+    }
   };
 
   // Append cell i's outline to a path. Low detail uses corners only.
