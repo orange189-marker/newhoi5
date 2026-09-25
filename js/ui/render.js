@@ -8,7 +8,7 @@ window.IM = window.IM || {};
   const S = HW / Math.sqrt(3);       // hex radius
   R.HW = HW; R.RH = RH;
 
-  let canvas, ctx, W, dpr = 1;
+  let canvas, ctx, W, dpr = 1, visMark = null;
   const cam = R.cam = { x: 0, y: 0, z: 1 };  // x,y = world coords at screen top-left
   R.mode = 'political';
   R.selected = new Set();
@@ -26,6 +26,7 @@ window.IM = window.IM || {};
       const r = (i / W.cols) | 0, c = i % W.cols;
       R.cx[i] = (c + 0.5 + (r & 1) * 0.5) * HW; R.cy[i] = (r + 0.5) * RH + RH * 0.5;
     }
+    IM.Geo.init(W, R);
     R.resize();
     window.addEventListener('resize', R.resize);
   };
@@ -168,6 +169,15 @@ window.IM = window.IM || {};
     if (!R.labels || R.labelsFor !== G || G.mapDirty || G.hour - R.labelsHour > 24 * 7 || G.hour < R.labelsHour) { R.computeLabels(G); R.labelsFor = G; G.mapDirty = false; }
     const z = cam.z * dpr;
     const vw = canvas.clientWidth / cam.z, vh = canvas.clientHeight / cam.z;
+    const base = ensureBase(G, vw, vh);
+    if (base) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      for (const off of [-R.worldW, 0, R.worldW]) {
+        const sx = (base.x - cam.x + off) * z, sy = (base.y - cam.y) * z, sw = base.w * z, sh = base.h * z;
+        if (sx > cw || sx + sw < 0) continue;
+        ctx.drawImage(base.canvas, sx, sy, sw, sh);
+      }
+    }
     // draw the world up to twice for east-west wrap
     const offs = [0];
     if (cam.x + vw > R.worldW) offs.push(R.worldW);
@@ -184,6 +194,43 @@ window.IM = window.IM || {};
     }
   };
 
+  // ------------------------------------------------------------------ terrain cache
+  let base = null, gid = 0;
+  function mapKey(G) {
+    if (!G._rid) G._rid = ++gid;
+    let h = G._rid * 7919;
+    for (const i of W.land) h = (h * 31 + G.ctrl[i]) | 0;
+    for (let i = 0; i < G.owner.length; i++) h = (h * 17 + G.owner[i]) | 0;
+    return `${h}|${R.mode}|${R.focusOwner ?? -1}|${G.wars.length}|${G.factions.length}|${G.player}`;
+  }
+  function ensureBase(G, vw, vh) {
+    const now = performance.now(), key = mapKey(G), z = cam.z;
+    const covers = b => b && cam.x >= b.x && cam.y >= b.y && cam.x + vw <= b.x + b.w && cam.y + vh <= b.y + b.h;
+    const zoomOk = b => b && b.z / z < 1.3 && z / b.z < 1.3;
+    if (base && base.G === G && covers(base) && zoomOk(base) && base.key === key) return base;
+    // throttle rebuilds while territory churns or while zooming; show the stale image meanwhile
+    if (base && base.G === G && covers(base) && now - base.t < (base.key !== key ? (z < 1.2 ? 900 : 400) : 140)) { R.dirty = true; return base; }
+    const mx = vw * 0.35, my = vh * 0.35;
+    const rect = { x: cam.x - mx, y: cam.y - my, w: vw + mx * 2, h: vh + my * 2 };
+    let scale = z * dpr;
+    const maxPx = 5200;
+    if (rect.w * scale > maxPx) scale = maxPx / rect.w;
+    if (rect.h * scale > maxPx) scale = Math.min(scale, maxPx / rect.h);
+    const cv = base && base.canvas || document.createElement('canvas');
+    cv.width = Math.ceil(rect.w * scale); cv.height = Math.ceil(rect.h * scale);
+    const c = cv.getContext('2d');
+    const saved = ctx; ctx = c;
+    c.clearRect(0, 0, cv.width, cv.height);
+    for (const off of [-R.worldW, 0, R.worldW]) {
+      if (rect.x + rect.w < off || rect.x > off + R.worldW) continue;
+      c.setTransform(scale, 0, 0, scale, (off - rect.x) * scale, -rect.y * scale);
+      baseLayer(G, rect.x - off, rect.y, rect.w, rect.h, z);
+    }
+    ctx = saved;
+    base = { canvas: cv, x: rect.x, y: rect.y, w: rect.w, h: rect.h, z, key, t: now, G };
+    return base;
+  }
+
   function visibleHexes(x0, y0, vw, vh) {
     const out = [];
     const r0 = Math.max(0, Math.floor(y0 / RH) - 1), r1 = Math.min(W.rows - 1, Math.ceil((y0 + vh) / RH) + 1);
@@ -192,43 +239,120 @@ window.IM = window.IM || {};
     return out;
   }
 
-  function drawLayer(G, off, x0, y0, vw, vh) {
-    const px = cam.z; // screen pixels per world pixel
+  // Terrain layer: coloured cells, occupation stripes, borders and coastline.
+  // Rendered into an offscreen cache and reused until territory changes.
+  function baseLayer(G, x0, y0, vw, vh, px) {
     const hexPx = HW * px;
     const vis = visibleHexes(x0, y0, vw, vh);
+    const Geo = IM.Geo, proxy = Geo.proxy, low = hexPx < 11;
+    const cells = [];
+    for (const i of vis) if (proxy[i] >= 0) cells.push(i);
+    // edge columns wrapped across the seam
+    const r0 = Math.max(0, Math.floor(y0 / RH) - 1), r1 = Math.min(W.rows - 1, Math.ceil((y0 + vh) / RH) + 1);
+    for (let r = r0; r <= r1; r++) {
+      if (x0 < HW && proxy[W.n + r] >= 0) cells.push(W.n + r);
+      if (x0 + vw > R.worldW - HW && proxy[W.n + W.rows + r] >= 0) cells.push(W.n + W.rows + r);
+    }
+    if (!visMark || visMark.length !== W.n) visMark = new Uint8Array(W.n);
+    for (const i of cells) visMark[i] = 1;
+    // each copy of the world paints only its own band, so shapes that cross the seam join up
+    ctx.save();
+    ctx.beginPath(); ctx.rect(-HW * 0.2, y0 - vh, R.worldW + HW * 0.4, vh * 3); ctx.clip();
+    // shallow-water glow along the real coastline
+    if (hexPx > 6) { ctx.strokeStyle = 'rgba(110,160,190,0.16)'; ctx.lineWidth = Math.max(5 / px, HW * 0.45); ctx.lineJoin = 'round'; ctx.stroke(Geo.coast); }
+    // everything below is clipped to the true shape of the land
+    ctx.save();
+    ctx.clip(Geo.coast);
+    ctx.fillStyle = '#7b7768'; // land nobody holds (remote islands)
+    ctx.fillRect(x0 - HW, y0 - HW, vw + HW * 2, vh + HW * 2);
     // --- fills grouped by colour
     const groups = new Map();
     const occupied = [];
-    for (const i of vis) {
-      if (!W.region[i]) continue;
-      const col = fillColor(G, i);
-      let p = groups.get(col); if (!p) groups.set(col, p = new Path2D());
-      hexPath(p, R.cx[i], R.cy[i], S * 1.04);
-      if (R.mode === 'political' && G.ctrl[i] !== G.owner[W.stateOf[i]]) occupied.push(i);
+    for (const i of cells) {
+      const p = proxy[i];
+      const col = fillColor(G, p);
+      let path = groups.get(col); if (!path) groups.set(col, path = new Path2D());
+      Geo.cellPath(path, i, low);
+      if (R.mode === 'political' && G.ctrl[p] !== G.owner[W.stateOf[p]]) occupied.push(i);
     }
-    for (const [col, p] of groups) { ctx.fillStyle = col; ctx.fill(p); }
+    for (const [col, path] of groups) { ctx.fillStyle = col; ctx.fill(path); if (!low) { ctx.strokeStyle = col; ctx.lineWidth = 0.6 / px; ctx.stroke(path); } }
     // occupied territory: owner colour stripes over the occupier colour
     if (occupied.length) {
       const og = new Map();
-      for (const i of occupied) { const oc = G.countries[G.owner[W.stateOf[i]]].color; let p = og.get(oc); if (!p) og.set(oc, p = new Path2D()); hexPath(p, R.cx[i], R.cy[i], S * 1.02); }
+      for (const i of occupied) { const oc = G.countries[G.owner[W.stateOf[proxy[i]]]].color; let path = og.get(oc); if (!path) og.set(oc, path = new Path2D()); Geo.cellPath(path, i, low); }
       ctx.save(); ctx.globalAlpha = 0.75;
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      const z = cam.z * dpr;
-      for (const [oc, p] of og) {
-        ctx.setTransform(z, 0, 0, z, (-x0) * z, -y0 * z);
+      for (const [oc, path] of og) {
         const pat = stripes(oc);
-        pat.setTransform && pat.setTransform(new DOMMatrix().scale(1 / z * dpr * 1.2));
-        ctx.fillStyle = pat; ctx.fill(p);
+        pat.setTransform && pat.setTransform(new DOMMatrix().scale(1 / cam.z * 1.2));
+        ctx.fillStyle = pat; ctx.fill(path);
       }
       ctx.restore();
-      ctx.setTransform(cam.z * dpr, 0, 0, cam.z * dpr, (-x0) * cam.z * dpr, -y0 * cam.z * dpr);
     }
     // nation-selection highlight: dim everyone else
     const F = R.focusOwner ?? -1;
     if (F >= 0) {
       const dim = new Path2D();
-      for (const i of vis) if (W.region[i] && G.owner[W.stateOf[i]] !== F) hexPath(dim, R.cx[i], R.cy[i], S * 1.04);
+      for (const i of cells) if (G.owner[W.stateOf[proxy[i]]] !== F) Geo.cellPath(dim, i, low);
       ctx.fillStyle = 'rgba(8,12,16,0.58)'; ctx.fill(dim);
+    }
+    // --- borders along the organic cell edges: state (thin), country (thick), fronts
+    const stateB = new Path2D(), countryB = new Path2D(), front = new Path2D(), focusB = new Path2D();
+    for (const i of cells) {
+      if (i >= W.n) continue; // ghost cells: their edges are drawn from the other side
+      const p = proxy[i], si = W.stateOf[p], oi = G.owner[si], ci = G.ctrl[p];
+      for (let k = 0; k < 6; k++) {
+        const j = W.nb[i * 6 + k];
+        if (j < 0) continue;
+        const q = proxy[j];
+        if (q < 0 || q === p) continue;
+        if (j < i && visMark[j]) continue; // each shared edge once
+        const sj = W.stateOf[q], oj = G.owner[sj], cj = G.ctrl[q];
+        if (F >= 0 && (oi === F) !== (oj === F)) Geo.edgePath(focusB, i, k, low);
+        if (sj === si && cj === ci) continue;
+        if (ci !== cj && ci >= 0 && cj >= 0 && IM.War.isEnemy(G, ci, cj)) Geo.edgePath(front, i, k, low);
+        else if (oi !== oj) Geo.edgePath(countryB, i, k, low);
+        else if (hexPx > 6) Geo.edgePath(stateB, i, k, low);
+      }
+    }
+    for (const i of cells) visMark[i] = 0;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (hexPx > 6) { ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 0.9 / px; ctx.stroke(stateB); }
+    ctx.strokeStyle = 'rgba(12,10,8,0.85)'; ctx.lineWidth = Math.max(1.4 / px, HW * 0.08); ctx.stroke(countryB);
+    ctx.strokeStyle = '#ff5a3c'; ctx.lineWidth = Math.max(2.2 / px, HW * 0.14); ctx.stroke(front);
+    ctx.strokeStyle = 'rgba(40,0,0,0.9)'; ctx.lineWidth = Math.max(0.8 / px, HW * 0.04); ctx.stroke(front);
+    ctx.restore();
+    // coastline on top: the real outline of the land
+    ctx.strokeStyle = 'rgba(14,22,30,0.9)'; ctx.lineWidth = Math.max(1 / px, HW * 0.05); ctx.stroke(Geo.coast);
+    if (F >= 0) {
+      ctx.save(); ctx.clip(Geo.coast);
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = Math.max(4 / px, HW * 0.2); ctx.stroke(focusB);
+      ctx.strokeStyle = '#f2d27d'; ctx.lineWidth = Math.max(2 / px, HW * 0.09); ctx.stroke(focusB);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawLayer(G, off, x0, y0, vw, vh) {
+    const px = cam.z; // screen pixels per world pixel
+    const hexPx = HW * px;
+    const vis = visibleHexes(x0, y0, vw, vh);
+    const Geo = IM.Geo, proxy = Geo.proxy, low = hexPx < 7;
+    if (R.selectedState >= 0 || (R.hoverHex >= 0 && W.region[R.hoverHex])) {
+      const cells = [];
+      for (const i of vis) if (proxy[i] >= 0) cells.push(i);
+      ctx.save(); ctx.clip(Geo.coast);
+    // selected state and hovered tile
+    if (R.selectedState >= 0) {
+      const path = new Path2D();
+      for (const i of cells) if (W.stateOf[proxy[i]] === R.selectedState) Geo.cellPath(path, i, low);
+      ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fill(path);
+    }
+    if (R.hoverHex >= 0 && W.region[R.hoverHex]) {
+      const path = new Path2D();
+      for (const i of cells) if (proxy[i] === R.hoverHex) Geo.cellPath(path, i, low);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill(path);
+    }
+      ctx.restore();
     }
     // forts (when zoomed in)
     if (hexPx > 14) {
@@ -237,47 +361,6 @@ window.IM = window.IM || {};
         const n = G.fort[i];
         for (let k = 0; k < n; k++) ctx.fillRect(R.cx[i] - S * 0.7 + k * S * 0.3, R.cy[i] + S * 0.55, S * 0.22, S * 0.22);
       }
-    }
-    // --- borders: state (thin), country (thick), front lines
-    const stateB = new Path2D(), countryB = new Path2D(), front = new Path2D(), coast = new Path2D(), focusB = new Path2D();
-    for (const i of vis) {
-      if (!W.region[i]) continue;
-      const si = W.stateOf[i], oi = G.owner[si], ci = G.ctrl[i];
-      for (let k = 0; k < 6; k++) {
-        const j = W.nb[i * 6 + k];
-        if (j < 0) continue;
-        if (!W.region[j]) {
-          if (hexPx > 5 || (F >= 0 && oi === F)) { const e = edgeCoords(i, k, 0); (F >= 0 && oi === F ? focusB : coast).moveTo(e[0], e[1]); (F >= 0 && oi === F ? focusB : coast).lineTo(e[2], e[3]); }
-          continue;
-        }
-        if (F >= 0 && (oi === F) !== (G.owner[W.stateOf[j]] === F)) { const e = edgeCoords(i, k, 0); if (Math.abs(e[0] - e[2]) < HW * 2) { focusB.moveTo(e[0], e[1]); focusB.lineTo(e[2], e[3]); } }
-        if (j < i && vis.length > 0 && Math.abs(R.cx[j] - R.cx[i]) < HW * 2) continue; // draw each shared edge once
-        const sj = W.stateOf[j];
-        if (sj === si && G.ctrl[j] === ci) continue;
-        const e = edgeCoords(i, k, 0);
-        if (Math.abs(e[0] - e[2]) > HW * 2) continue;
-        const oj = G.owner[sj], cj = G.ctrl[j];
-        if (ci !== cj && ci >= 0 && cj >= 0 && IM.War.isEnemy(G, ci, cj)) { front.moveTo(e[0], e[1]); front.lineTo(e[2], e[3]); }
-        else if (oi !== oj) { countryB.moveTo(e[0], e[1]); countryB.lineTo(e[2], e[3]); }
-        else if (hexPx > 6) { stateB.moveTo(e[0], e[1]); stateB.lineTo(e[2], e[3]); }
-      }
-    }
-    ctx.lineCap = 'round';
-    if (hexPx > 5) { ctx.strokeStyle = 'rgba(200,225,240,0.35)'; ctx.lineWidth = 1 / px; ctx.stroke(coast); }
-    if (hexPx > 6) { ctx.strokeStyle = 'rgba(0,0,0,0.28)'; ctx.lineWidth = 0.8 / px; ctx.stroke(stateB); }
-    ctx.strokeStyle = 'rgba(10,10,10,0.85)'; ctx.lineWidth = Math.max(1.3 / px, HW * 0.08); ctx.stroke(countryB);
-    if (F >= 0) { ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = Math.max(4 / px, HW * 0.2); ctx.stroke(focusB); ctx.strokeStyle = '#f2d27d'; ctx.lineWidth = Math.max(2 / px, HW * 0.09); ctx.stroke(focusB); }
-    ctx.strokeStyle = '#ff5a3c'; ctx.lineWidth = Math.max(2.2 / px, HW * 0.14); ctx.stroke(front);
-    ctx.strokeStyle = 'rgba(40,0,0,0.9)'; ctx.lineWidth = Math.max(0.8 / px, HW * 0.04); ctx.stroke(front);
-    // selected state highlight
-    if (R.selectedState >= 0) {
-      const p = new Path2D();
-      for (const h of W.states[R.selectedState].hexes) hexPath(p, R.cx[h], R.cy[h], S);
-      ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fill(p);
-    }
-    if (R.hoverHex >= 0 && W.region[R.hoverHex]) {
-      const p = new Path2D(); hexPath(p, R.cx[R.hoverHex], R.cy[R.hoverHex], S);
-      ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 1.5 / px; ctx.stroke(p);
     }
     drawCamps(G, hexPx, px);
     drawCities(G, vis, hexPx, px);

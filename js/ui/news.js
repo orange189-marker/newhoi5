@@ -198,29 +198,38 @@ window.IM = window.IM || {};
     const S = R.HW / Math.sqrt(3) * sc * 1.04;
     ctx.fillStyle = P.sea; ctx.fillRect(0, 0, cw, ch);
     const red = new Set(art.red || []), blue = new Set(art.blue || []);
-    const groups = { land: new Path2D(), red: new Path2D(), blue: new Path2D() };
     const X = i => { let dx = R.cx[i] - x0; if (dx < -R.worldW / 2) dx += R.worldW; if (dx > R.worldW / 2) dx -= R.worldW; return dx * sc; };
     const Y = i => (R.cy[i] - y0) * sc;
-    const side = i => { const tg = G.countries[G.ctrl[i]]?.tag; return red.has(tg) ? 'red' : blue.has(tg) ? 'blue' : 'land'; };
-    const visible = [];
-    for (const i of W.land) {
-      const x = X(i), y = Y(i);
-      if (x < -S * 2 || y < -S * 2 || x > cw + S * 2 || y > ch + S * 2) continue;
-      visible.push(i);
-      hexPath(groups[side(i)], x, y, S);
+    // organic cells clipped to the real coastline, drawn in world space
+    const Geo = IM.Geo, proxy = Geo.proxy;
+    const side = p => { const tg = G.countries[G.ctrl[p]]?.tag; return red.has(tg) ? 'red' : blue.has(tg) ? 'blue' : 'land'; };
+    const groups = { land: new Path2D(), red: new Path2D(), blue: new Path2D() };
+    const cells = [];
+    const r0 = Math.max(0, Math.floor(y0 / R.RH) - 2), r1 = Math.min(W.rows - 1, Math.ceil((y0 + viewH) / R.RH) + 2);
+    const c0 = Math.floor(x0 / R.HW) - 2, c1 = Math.ceil((x0 + viewW) / R.HW) + 2;
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const i = r * W.cols + ((c % W.cols) + W.cols) % W.cols;
+      if (proxy[i] < 0) continue;
+      cells.push(i); Geo.cellPath(groups[side(proxy[i])], i, false);
     }
-    ctx.fillStyle = P.land; ctx.fill(groups.land);
+    const b = new Path2D();
+    for (const i of cells) for (let k = 0; k < 6; k++) {
+      const j = W.nb[i * 6 + k]; if (j < 0 || proxy[j] < 0 || j < i) continue;
+      if (G.ctrl[proxy[j]] !== G.ctrl[proxy[i]]) Geo.edgePath(b, i, k, false);
+    }
+    ctx.save();
+    ctx.setTransform(sc, 0, 0, sc, -x0 * sc, -y0 * sc);
+    ctx.strokeStyle = style === 'super' ? 'rgba(90,120,140,0.12)' : style === 'ww2' ? 'rgba(90,70,40,0.25)' : 'rgba(110,160,190,0.18)';
+    ctx.lineWidth = R.HW * 0.5; ctx.lineJoin = 'round'; ctx.stroke(Geo.coast);
+    ctx.save(); ctx.clip(Geo.coast);
+    ctx.fillStyle = P.land; ctx.fillRect(x0, y0, viewW, viewH);
+    ctx.fill(groups.land);
     ctx.fillStyle = P.red; ctx.fill(groups.red);
     ctx.fillStyle = P.blue; ctx.fill(groups.blue);
-    // borders between controllers
-    const b = new Path2D();
-    const V = [[0, -1], [0.866, -0.5], [0.866, 0.5], [0, 1], [-0.866, 0.5], [-0.866, -0.5]], pairs = [[1, 2], [4, 5], [0, 1], [5, 0], [2, 3], [3, 4]];
-    for (const i of visible) for (let k = 0; k < 6; k++) {
-      const j = W.nb[i * 6 + k]; if (j < 0 || !W.region[j] || G.ctrl[j] === G.ctrl[i]) continue;
-      const x = X(i), y = Y(i), [a, c] = pairs[k];
-      b.moveTo(x + V[a][0] * S, y + V[a][1] * S); b.lineTo(x + V[c][0] * S, y + V[c][1] * S);
-    }
-    ctx.strokeStyle = P.border; ctx.lineWidth = Math.max(1.2, S * 0.12); ctx.stroke(b);
+    ctx.strokeStyle = P.border; ctx.lineWidth = Math.max(1.2 / sc, R.HW * 0.1); ctx.lineCap = 'round'; ctx.stroke(b);
+    ctx.restore();
+    ctx.strokeStyle = P.border; ctx.lineWidth = Math.max(1 / sc, R.HW * 0.06); ctx.stroke(Geo.coast);
+    ctx.restore();
     // arrows
     const labels = new Set(art.mark ? [art.mark] : []);
     if (style === 'super') for (const [, to] of art.strikes || []) labels.add(to);

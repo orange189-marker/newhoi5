@@ -76,6 +76,7 @@ Each era has its own borders, colonial empires, factions (Allies, Axis, Cominter
 - **Super events** — full-screen moments for turning points (the invasion of Poland, Barbarossa, Pearl Harbor, Trinity, Desert Storm, the fall of the USSR, 9/11, the 2022 invasion of Ukraine, a Taiwan war, any nuclear strike, the fall of a great capital) with an animated map of the offensive, a historical quote, a nation-specific account and synthesized sound.
 - **The road to war (2021 era)** — from July 2021 a timeline of everyday news (the Euros, a record harvest, Christmas markets) is slowly overtaken by the buildup: Zapad-2021, satellite images of camps, US warnings, a cyberattack, troops in Belarus, evacuations. Field camps grow on the map, Russian divisions really move to the border, and a **Border Watch** gauge tracks the intelligence estimate. Ukraine and Russia get decisions along the way.
 - **The invasion super event** opens on a black screen with the clock ticking to 05:00, then missile strikes streak across the map, impacts shake the screen, columns advance and a live feed of the first day scrolls in.
+- **Realistic map** — provinces are organic, irregular shapes instead of hexagons, and every country is clipped to its real Natural Earth coastline, so Italy, Greece, Japan or Crimea look like themselves. (The game logic still runs on a hidden hex grid.)
 - Real flags for every nation, with period-correct flags for historical states (Soviet Union, Manchukuo, Vichy France, Free France, the British Raj, pre-1965 Canada, Ichkeria and more).
 - A nation-selection screen with briefings, difficulty ratings and strength comparisons for each era's powers.
 - Saving and loading (stored in your browser).
@@ -87,8 +88,9 @@ index.html            entry point
 css/style.css         interface styles
 js/data/              map data (generated), cities/states, countries, eras, rules (tech, focus, laws, units)
 js/engine/            world model & pathfinding, economy, war, diplomacy, events, AI, save/load
-js/ui/                canvas renderer, screens & input, management panels
+js/ui/                canvas renderer, map geometry (organic provinces), screens & input, management panels
 tools/build-map.js    regenerates js/data/mapdata.js from Natural Earth data
+tools/build-coast.js  regenerates js/data/coast.js (simplified real coastlines)
 tools/build-flags.js  regenerates js/data/flags.js (flag-icons + hand-drawn period flags)
 tools/sim-test.js     headless simulation of every era (smoke/balance test)
 ```
@@ -99,6 +101,7 @@ tools/sim-test.js     headless simulation of every era (smoke/balance test)
 npm install        # only needed for the tools
 npm test           # simulate every era for 90 days headlessly: node tools/sim-test.js [days] [era]
 npm run build-map  # rebuild the hex map from Natural Earth (world-atlas)
+npm run build-coast # rebuild the coastlines the map is clipped to
 npm run build-flags # rebuild the flag images (needs Playwright's Chromium)
 ```
 

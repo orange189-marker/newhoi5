@@ -7,7 +7,8 @@
     "build-map": "node tools/build-map.js",
     "test": "node tools/sim-test.js",
     "serve": "python3 -m http.server 8080",
-    "build-flags": "node tools/build-flags.js"
+    "build-flags": "node tools/build-flags.js",
+    "build-coast": "node tools/build-coast.js"
   },
   "devDependencies": {
     "d3-geo": "^3.1.0",
